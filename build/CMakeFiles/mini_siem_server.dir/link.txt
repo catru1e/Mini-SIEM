@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/mini_siem_server.dir/server/src/main.cpp.o CMakeFiles/mini_siem_server.dir/server/src/db_sqlite.cpp.o -o /home/gift/mini-siem-usb/dist/mini_siem_server  -lsqlite3 
