@@ -25,4 +25,6 @@ target_link_libraries(mini_siem_server PRIVATE sqlite3)
 # ---- agent (пока пустой stub, сделаем позже) ----
 add_executable(mini_siem_agent
   agent/src/main.cpp
+  agent/src/http_client.cpp
+  agent/src/http_client.hpp
 )

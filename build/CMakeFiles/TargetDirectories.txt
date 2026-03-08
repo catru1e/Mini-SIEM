@@ -1,4 +1,0 @@
-/home/gift/mini-siem-usb/build/CMakeFiles/mini_siem_server.dir
-/home/gift/mini-siem-usb/build/CMakeFiles/mini_siem_agent.dir
-/home/gift/mini-siem-usb/build/CMakeFiles/edit_cache.dir
-/home/gift/mini-siem-usb/build/CMakeFiles/rebuild_cache.dir

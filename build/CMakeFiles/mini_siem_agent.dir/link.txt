@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/mini_siem_agent.dir/agent/src/main.cpp.o -o /home/gift/mini-siem-usb/dist/mini_siem_agent 
