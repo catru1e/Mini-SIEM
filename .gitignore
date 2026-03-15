@@ -1,6 +1,12 @@
 # CMake build directory
 /build/
 
+logs/*
+!logs/.gitkeep
+
+data/*
+!data/.gitkeep
+
 # CMake generated files
 /CMakeCache.txt
 /CMakeFiles/
