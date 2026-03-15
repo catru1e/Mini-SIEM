@@ -9,11 +9,14 @@
 
 #include "json.hpp"
 #include "http_client.hpp"
+#include "log_reader.hpp"
+#include "state_store.hpp"
 
 using json = nlohmann::json;
 
 static std::string now_iso_utc() {
   using namespace std::chrono;
+
   auto now = system_clock::now();
   auto secs = time_point_cast<std::chrono::seconds>(now);
   auto ms = duration_cast<milliseconds>(now - secs).count();
@@ -28,6 +31,7 @@ static std::string now_iso_utc() {
                 tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                 tm.tm_hour, tm.tm_min, tm.tm_sec,
                 static_cast<long long>(ms));
+
   return std::string(buf);
 }
 
@@ -46,44 +50,94 @@ static void append_agent_log(const std::string& line) {
   out << line << "\n";
 }
 
+static std::string choose_log_source() {
+  if (std::filesystem::exists("logs/demo_auth.log"))
+    return "logs/demo_auth.log";
+
+  if (std::filesystem::exists("/var/log/auth.log"))
+    return "/var/log/auth.log";
+
+  return "logs/demo_auth.log";
+}
+
+static std::string source_name(const std::string& path) {
+  return std::filesystem::path(path).filename().string();
+}
+
 int main() {
   try {
     std::filesystem::create_directories("logs");
+    std::filesystem::create_directories("data");
 
     HttpClient client("127.0.0.1", 8080);
+
     const std::string host = get_hostname_safe();
+    const std::string log_path = choose_log_source();
 
-    std::cout << "[mini-siem-agent] started, sending demo events to http://127.0.0.1:8080/ingest\n";
+    LogReader reader(log_path);
+    StateStore state_store("data/agent_state.json");
 
-    int counter = 0;
+    AgentState state = state_store.load();
+
+    if (state.log_path != log_path) {
+      state.log_path = log_path;
+      state.offset = 0;
+      state_store.save(state);
+    }
+
+    std::cout << "[mini-siem-agent] started, reading log: " << log_path << "\n";
+    append_agent_log("agent started, source=" + log_path);
 
     while (true) {
-      json event = {
-        {"ts", now_iso_utc()},
-        {"host", host},
-        {"source", "agent_demo"},
-        {"event_type", "heartbeat"},
-        {"severity", "info"},
-        {"message", "demo event from agent"},
-        {"counter", counter}
-      };
 
-      std::string response_text;
-      bool ok = client.post_json("/ingest", event.dump(), response_text);
-
-      if (ok) {
-        std::string msg = "[OK] sent event counter=" + std::to_string(counter) + " response=" + response_text;
-        std::cout << msg << "\n";
-        append_agent_log(msg);
-      } else {
-        std::string msg = "[ERR] failed to send event counter=" + std::to_string(counter) + " response=" + response_text;
-        std::cerr << msg << "\n";
-        append_agent_log(msg);
+      if (!reader.exists()) {
+        append_agent_log("log file not found yet: " + log_path);
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        continue;
       }
 
-      counter++;
-      std::this_thread::sleep_for(std::chrono::seconds(2));
+      auto lines = reader.read_new_lines(state.offset, 100);
+
+      if (lines.empty()) {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        continue;
+      }
+
+      for (auto& item : lines) {
+
+        json event = {
+          {"ts", now_iso_utc()},
+          {"host", host},
+          {"source", source_name(log_path)},
+          {"event_type", "raw_log_line"},
+          {"severity", "info"},
+          {"raw", item.text}
+        };
+
+        std::string response_text;
+        bool ok = client.post_json("/ingest", event.dump(), response_text);
+
+        if (ok) {
+          state.offset = item.next_offset;
+          state_store.save(state);
+
+          std::string msg = "[OK] raw_log_line sent offset=" +
+                            std::to_string(state.offset) +
+                            " raw=" + item.text;
+
+          std::cout << msg << "\n";
+          append_agent_log(msg);
+        }
+        else {
+          std::string msg = "[ERR] failed to send log line raw=" + item.text;
+
+          std::cerr << msg << "\n";
+          append_agent_log(msg);
+          break;
+        }
+      }
     }
+
   } catch (const std::exception& e) {
     std::cerr << "Fatal: " << e.what() << "\n";
     return 1;

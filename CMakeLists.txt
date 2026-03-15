@@ -27,4 +27,6 @@ add_executable(mini_siem_agent
   agent/src/main.cpp
   agent/src/http_client.cpp
   agent/src/http_client.hpp
+  agent/src/log_reader.cpp
+  agent/src/state_store.cpp
 )
