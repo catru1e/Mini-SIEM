@@ -11,6 +11,7 @@
 #include "http_client.hpp"
 #include "log_reader.hpp"
 #include "state_store.hpp"
+#include "auth_parser.hpp"
 
 using json = nlohmann::json;
 
@@ -76,6 +77,7 @@ int main() {
 
     LogReader reader(log_path);
     StateStore state_store("data/agent_state.json");
+    AuthParser auth_parser;
 
     AgentState state = state_store.load();
 
@@ -104,15 +106,25 @@ int main() {
       }
 
       for (auto& item : lines) {
+	json event;
+	event["ts"] = now_iso_utc();
+	event["host"] = host;
+	event["source"] = source_name(log_path);
 
-        json event = {
-          {"ts", now_iso_utc()},
-          {"host", host},
-          {"source", source_name(log_path)},
-          {"event_type", "raw_log_line"},
-          {"severity", "info"},
-          {"raw", item.text}
-        };
+	auto parsed = auth_parser.parse(item.text);
+
+	if (parsed.has_value()){
+	  event["event_type"] = parsed->event_type;
+	  event["severity"] = parsed->severity;
+
+	  for (auto it = parsed->fields.begin(); it != parsed->fields.end(); ++it) {
+	    event[it.key()] = it.value();
+	  }
+	} else {
+	  event["event_type"] = "raw_log_line";
+	  event["severity"] = "info";
+	  event["raw"] = item.text;
+	}
 
         std::string response_text;
         bool ok = client.post_json("/ingest", event.dump(), response_text);
@@ -121,15 +133,18 @@ int main() {
           state.offset = item.next_offset;
           state_store.save(state);
 
-          std::string msg = "[OK] raw_log_line sent offset=" +
-                            std::to_string(state.offset) +
-                            " raw=" + item.text;
+	  std::string msg = "[OK] sent event_type=" +
+			    event["event_type"].get<std::string>() +
+			    " offset=" + std::to_string(state.offset) +
+			    " raw=" + item.text;
 
           std::cout << msg << "\n";
           append_agent_log(msg);
         }
         else {
-          std::string msg = "[ERR] failed to send log line raw=" + item.text;
+	  std::string msg = "[ERR] failed to send event_type=" +
+			    event["event_type"].get<std::string>() =
+			    " raw=" + item.text;
 
           std::cerr << msg << "\n";
           append_agent_log(msg);
