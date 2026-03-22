@@ -6,8 +6,11 @@
 struct DbEventRow {
   long long id = 0;
   std::string ts;
+  std::string received_at;
+  std::string host;
   std::string event_type;
   std::string source;
+  std::string severity;
   std::string json;
 };
 
@@ -15,7 +18,7 @@ class SqliteDb {
 public:
   explicit SqliteDb(std::string db_path);
 
-  // dealem tablicu esli netu
+  // delaem tablicu esli netu
   void init();
 
   // zapishem shtuchki

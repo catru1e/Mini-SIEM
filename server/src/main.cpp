@@ -103,8 +103,11 @@ int main() {
         json item = {
           {"id", r.id},
           {"ts", r.ts},
+	  {"received_at", r.received_at},
+	  {"host", r.host},
           {"event_type", r.event_type},
           {"source", r.source},
+	  {"severity", r.severity},
           {"event", original}
         };
         arr.push_back(std::move(item));
