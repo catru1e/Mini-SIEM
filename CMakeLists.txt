@@ -18,6 +18,8 @@ add_executable(mini_siem_server
   server/src/main.cpp
   server/src/db_sqlite.cpp
   server/src/db_sqlite.hpp
+  server/src/detect.cpp
+  server/src/detect.hpp
 )
 
 target_link_libraries(mini_siem_server PRIVATE sqlite3)

@@ -3,6 +3,7 @@
 
 #include <sqlite3.h>
 
+#include <iostream>
 #include <chrono>
 #include <ctime>
 #include <stdexcept>
@@ -69,6 +70,19 @@ void SqliteDb::init() {
     CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
     CREATE INDEX IF NOT EXISTS idx_events_host ON events(host);
     CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
+
+    CREATE TABLE IF NOT EXISTS alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      rule_name TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);
+    CREATE INDEX IF NOT EXISTS idx_alerts_rule_name ON alerts(rule_name);
   )SQL";
 
   char* errmsg = nullptr;
@@ -169,4 +183,205 @@ std::vector<DbEventRow> SqliteDb::get_last_events(int limit) {
   sqlite3_finalize(stmt);
   sqlite3_close(db);
   return rows;
+}
+
+
+// !!!!!!!!!!!!!!!!! ALERT PART !!!!!!!!!!!!!!!!!!!
+long long SqliteDb::count_auth_failed_by_src_ip_since(const std::string& src_ip, const std::string& since_ts) {
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM events "
+    "WHERE event_type = 'auth_failed' "
+    "AND ts >= ? "
+    "AND json_extract(json, '$.src_ip') = ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, src_ip.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(count_auth_failed_by_src_ip_since)");
+  }
+
+  long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count;
+}
+
+long long SqliteDb::count_auth_failed_by_user_since(const std::string& user, const std::string& since_ts) {
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM events "
+    "WHERE event_type = 'auth_failed' "
+    "AND ts >= ? "
+    "AND json_extract(json, '$.user') = ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqilte3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, user.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(count_auth_failed_by_user_since)");
+  }
+
+  long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count;
+}
+
+long long SqliteDb::count_auth_invalid_user_by_src_ip_since(const std::string& src_ip, const std::string& since_ts) {
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM events "
+    "WHERE event_type = 'auth_invalid_user' "
+    "AND ts >= ? "
+    "AND json_extract(json, '$.src_ip') = ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, src_ip.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(count_auth_invalid_user_by_src_ip_since)");
+  }
+
+  long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count;
+}
+
+long long SqliteDb::count_privilege_escalation_by_user_since(const std::string& user, const std::string& since_ts) {
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM events "
+    "WHERE event_type = 'privilege_escalation' "
+    "AND ts >= ? "
+    "AND json_extract(json, '$.user') = ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, user.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(count_privilege_escalation_by_user_since)");
+  }
+
+  long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count;
+}
+
+long long SqliteDb::count_auth_success_by_user_since(const std::string& user, const std::string& since_ts) {
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM events "
+    "WHERE event_type = 'auth_success' "
+    "AND ts >= ? "
+    "AND json_extract(json, '$.user') = ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, user.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(count_auth_success_by_user_since)");
+  }
+
+  long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count;
+}
+
+void SqliteDb::insert_alert(const std::string& ts,
+			    const std::string& rule_name,
+			    const std::string& severity,
+			    const std::string& title,
+			    const std::string& description,
+			    const std::string& json_str) {
+  std::cerr << "[db] insert_alert rule_name=" << rule_name
+          << " severity=" << severity
+          << " title=" << title << "\n";
+
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql = "INSERT INTO alerts(ts, rule_name, severity, title, description, json) "
+		    "VALUES(?,?,?,?,?,?);";
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, rule_name.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, severity.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 4, title.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 5, description.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 6, json_str.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  throw_sqlite(rc, db, "sqlite3_step(insert_alert)");
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
 }

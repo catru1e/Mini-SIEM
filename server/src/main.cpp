@@ -7,6 +7,7 @@
 #include "httplib.h"
 #include "json.hpp"
 #include "db_sqlite.hpp"
+#include "detect.hpp"
 
 using json = nlohmann::json;
 
@@ -44,6 +45,7 @@ int main() {
 
     SqliteDb db("data/events.db");
     db.init();
+    DetectionEngine detector(db);
 
     httplib::Server srv;
 
@@ -67,10 +69,19 @@ int main() {
 
         db.insert_event(ts, event_type, source, body);
 
+	try {
+	  detector.process_event(j);
+	} catch (const std::exception& e) {
+	  std::cerr << "[detect][ERR] " << e.what() << "\n";
+	} catch (...){
+	  std::cerr << "[detect][ERR] unknown detection error\n";
+	}
+
         json out = {{"status", "ok"}};
         res.set_content(out.dump(), "application/json");
         res.status = 200;
       } catch (const std::exception& e) {
+	std::cerr << "[ingest][ERR] " << e.what() << "\n";
         json out = {{"status", "error"}, {"message", e.what()}};
         res.set_content(out.dump(), "application/json");
         res.status = 400;

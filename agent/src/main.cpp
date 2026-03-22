@@ -143,7 +143,8 @@ int main() {
         }
         else {
 	  std::string msg = "[ERR] failed to send event_type=" +
-			    event["event_type"].get<std::string>() =
+			    event["event_type"].get<std::string>() +
+			    " response=" + response_text +
 			    " raw=" + item.text;
 
           std::cerr << msg << "\n";
