@@ -234,7 +234,7 @@ long long SqliteDb::count_auth_failed_by_user_since(const std::string& user, con
 
   sqlite3_stmt* stmt = nullptr;
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
-  throw_sqlite(rc, db, "sqilte3_prepare_v2");
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
 
   sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 2, user.c_str(), -1, SQLITE_TRANSIENT);
@@ -385,3 +385,49 @@ void SqliteDb::insert_alert(const std::string& ts,
   sqlite3_finalize(stmt);
   sqlite3_close(db);
 }
+
+
+std::vector<DbAlertRow> SqliteDb::get_last_alerts(int limit) {
+  if (limit <= 0) limit = 100;
+  if (limit > 1000) limit = 1000;
+
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql =
+      "SELECT id, ts, rule_name, severity, title, description, json "
+      "FROM alerts "
+      "ORDER BY id DESC "
+      "LIMIT ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_int(stmt, 1, limit);
+
+  std::vector<DbAlertRow> rows;
+  while (true) {
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+      DbAlertRow r;
+      r.id = sqlite3_column_int64(stmt, 0);
+      r.ts = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+      r.rule_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+      r.severity = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+      r.title = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+      r.description = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+      r.json = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+      rows.push_back(std::move(r));
+      continue;
+    }
+    if (rc == SQLITE_DONE) break;
+    throw_sqlite(rc, db, "sqlite3_step(get_last_alerts)");
+  }
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return rows;
+}
+

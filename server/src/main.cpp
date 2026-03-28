@@ -129,6 +129,45 @@ int main() {
       res.status = 200;
     });
 
+
+    srv.Get("/api/alerts", [&](const httplib::Request& req, httplib::Response& res) {
+      int limit = 100;
+      if (req.has_param("limit")) {
+        try {
+          limit = std::stoi(req.get_param_value("limit"));
+        } catch (...) {
+          limit = 100;
+        }
+      }
+
+      auto rows = db.get_last_alerts(limit);
+
+      json arr = json::array();
+      for (const auto& r : rows) {
+        json original;
+        try {
+          original = json::parse(r.json);
+        } catch (...) {
+          original = json::object({{"raw_json", r.json}});
+        }
+
+        json item = {
+          {"id", r.id},
+          {"ts", r.ts},
+          {"rule_name", r.rule_name},
+          {"severity", r.severity},
+          {"title", r.title},
+          {"description", r.description},
+          {"alert", original}
+        };
+        arr.push_back(std::move(item));
+      }
+
+      json out = {{"alerts", arr}};
+      res.set_content(out.dump(), "application/json");
+      res.status = 200;
+    });
+
     std::cout << "[mini-siem-server] listening on http://127.0.0.1:8080\n";
     srv.listen("127.0.0.1", 8080);
   } catch (const std::exception& e) {

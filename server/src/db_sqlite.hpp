@@ -39,6 +39,7 @@ public:
 
   //prochitat poslednie N shtuki (id DESC)
   std::vector<DbEventRow> get_last_events(int limit);
+  std::vector<DbAlertRow> get_last_alerts(int limit); //ATTENTION IT IS ALERTS 
 
   long long count_auth_failed_by_src_ip_since(const std::string& src_ip, const std::string& since_ts);
   long long count_auth_failed_by_user_since(const std::string& user, const std::string& since_ts);

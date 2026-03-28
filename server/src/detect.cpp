@@ -64,6 +64,7 @@ void DetectionEngine::process_event(const json& event) {
   if (event_type == "auth_failed") {
     detect_failed_login_by_ip(event);
     detect_failed_login_by_user(event);
+    return;
   }
   if (event_type == "auth_invalid_user") {
     detect_invalid_user_by_ip(event);
@@ -255,23 +256,3 @@ void DetectionEngine::detect_too_frequent_logins_by_user(const json& event) {
 
   db_.insert_alert(now, rule_name, severity, title, desc.str(), alert.dump());
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
