@@ -8,6 +8,7 @@
 #include "json.hpp"
 #include "db_sqlite.hpp"
 #include "detect.hpp"
+#include "correlate.hpp"
 
 using json = nlohmann::json;
 
@@ -46,6 +47,7 @@ int main() {
     SqliteDb db("data/events.db");
     db.init();
     DetectionEngine detector(db);
+    CorrelationEngine correlator(db);
 
     httplib::Server srv;
 
@@ -71,6 +73,7 @@ int main() {
 
 	try {
 	  detector.process_event(j);
+	  correlator.process_event(j);
 	} catch (const std::exception& e) {
 	  std::cerr << "[detect][ERR] " << e.what() << "\n";
 	} catch (...){
