@@ -3,6 +3,8 @@
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 
 #include "httplib.h"
 #include "json.hpp"
@@ -38,11 +40,22 @@ static std::string safe_string(const json& j, const char* key, const std::string
   return j[key].dump();
 }
 
+static bool read_file(const std::string& path, std::string& out) {
+  std::ifstream file(path, std::ios::binary);
+  if (!file) return false;
+
+  std::ostringstream ss;
+  ss << file.rdbuf();
+  out = ss.str();
+  return true;
+}
+
 int main() {
   try {
     // Важно: относительный путь => работает с флешки
     std::filesystem::create_directories("data");
     std::filesystem::create_directories("logs");
+    std::filesystem::create_directories("web");
 
     SqliteDb db("data/events.db");
     db.init();
@@ -54,6 +67,39 @@ int main() {
     // Healthcheck
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
       res.set_content("OK\n", "text/plain");
+    });
+
+    // Static: index
+    srv.Get("/", [&](const httplib::Request&, httplib::Response& res) {
+      std::string content;
+      if (!read_file("web/index.html", content)) {
+	res.status = 404;
+	res.set_content("web/index.html not found\n", "text/plain");
+	return;
+      }
+      res.set_content(content, "text/html; charset=UTF-8");
+    });
+
+
+    // Static: JS
+    srv.Get("/app.js", [&](const httplib::Request&, httplib::Response& res){
+      std::string content;
+      if (!read_file("web/app.js", content)){
+	res.status = 404;
+	res.set_content("web/app.js not found\n", "text/plain");
+      }
+      res.set_content(content, "application/javascript; charset=UTF-8");
+    });
+
+    // Static: CSS
+    srv.Get("/style.css", [&](const httplib::Request&, httplib::Response& res) {
+      std::string content;
+      if (!read_file("web/style.css", content)) {
+	res.status = 404;
+	res.set_content("web/style.css not found\n", "text/plain");
+	return;
+      }
+      res.set_content(content, "text/css; charset=UTF-8");
     });
 
     // Ingest endpoint
@@ -132,7 +178,7 @@ int main() {
       res.status = 200;
     });
 
-
+    // Get last alerts
     srv.Get("/api/alerts", [&](const httplib::Request& req, httplib::Response& res) {
       int limit = 100;
       if (req.has_param("limit")) {

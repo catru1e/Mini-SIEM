@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini SIEM Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">MS</div>
+        <div>
+          <h1>Mini SIEM</h1>
+          <p>Monitoring Dashboard</p>
+        </div>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="sidebar-title">Status</div>
+        <div id="statusText" class="status-pill">Loading...</div>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="sidebar-title">Controls</div>
+        <button id="refreshBtn" class="primary-btn">Refresh now</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <h2>Security Overview</h2>
+          <p class="topbar-subtitle">Live events and alerts from your local SIEM instance</p>
+        </div>
+      </header>
+
+      <section class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Events</div>
+          <div id="statEvents" class="stat-value">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Alerts</div>
+          <div id="statAlerts" class="stat-value">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">High Alerts</div>
+          <div id="statHighAlerts" class="stat-value danger">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Last Update</div>
+          <div id="statLastUpdate" class="stat-value small">—</div>
+        </div>
+      </section>
+
+      <section class="filters-card">
+        <div class="filters-header">
+          <h3>Filters</h3>
+        </div>
+
+        <div class="filters-grid">
+          <div class="filter-group">
+            <label for="eventTypeFilter">Event type</label>
+            <select id="eventTypeFilter">
+              <option value="">All</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="severityFilter">Severity</label>
+            <select id="severityFilter">
+              <option value="">All</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="limitInput">Limit</label>
+            <input id="limitInput" type="number" min="1" max="500" value="100" />
+          </div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h3>Events</h3>
+              <p>Recent ingested activity</p>
+            </div>
+            <span id="eventsCount" class="count-badge">0</span>
+          </div>
+          <div id="eventsList" class="items-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h3>Alerts</h3>
+              <p>Detection and correlation results</p>
+            </div>
+            <span id="alertsCount" class="count-badge">0</span>
+          </div>
+          <div id="alertsList" class="items-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
