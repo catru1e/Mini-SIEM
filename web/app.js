@@ -14,6 +14,9 @@ const severityFilter = document.getElementById("severityFilter");
 const limitInput = document.getElementById("limitInput");
 const refreshBtn = document.getElementById("refreshBtn");
 
+//fix web update-a
+const openedJson = new Set();
+
 let allEvents = [];
 let allAlerts = [];
 let eventSource = null;
@@ -66,7 +69,7 @@ function renderEvents(items) {
   }
 
   eventsList.innerHTML = items.map(item => {
-    const rawId = `event-json-${item.id}-${Math.random().toString(36).slice(2)}`;
+    const rawId = `event-json-${item.id ?? "live"}-${item.ts ?? ""}-${item.event_type ?? ""}`;
     return `
       <div class="item-card">
         <div class="item-top">
@@ -90,7 +93,7 @@ function renderEvents(items) {
         <div class="description">${escapeHtml(shortEventDescription(item))}</div>
 
         <button class="json-toggle" onclick="toggleJson('${rawId}')">Show raw JSON</button>
-        <pre id="${rawId}" class="raw-json">${escapeHtml(JSON.stringify(item.event || {}, null, 2))}</pre>
+        <pre id="${rawId}" class="raw-json ${openedJson.has(rawId) ? 'open' : ''}">${escapeHtml(JSON.stringify(item.event || {}, null, 2))}</pre>
       </div>
     `;
   }).join("");
@@ -105,7 +108,7 @@ function renderAlerts(items) {
   }
 
   alertsList.innerHTML = items.map(item => {
-    const rawId = `alert-json-${item.id}-${Math.random().toString(36).slice(2)}`;
+    const rawId = `alert-json-${item.id ?? "live"}-${item.ts ?? ""}-${item.rule_name ?? ""}`;
     return `
       <div class="item-card">
         <div class="item-top">
@@ -129,7 +132,7 @@ function renderAlerts(items) {
         <div class="description">${escapeHtml(item.description || "No description")}</div>
 
         <button class="json-toggle" onclick="toggleJson('${rawId}')">Show raw JSON</button>
-        <pre id="${rawId}" class="raw-json">${escapeHtml(JSON.stringify(item.alert || {}, null, 2))}</pre>
+        <pre id="${rawId}" class="raw-json ${openedJson.has(rawId) ? 'open' : ''}">${escapeHtml(JSON.stringify(item.alert || {}, null, 2))}</pre>
       </div>
     `;
   }).join("");
@@ -275,14 +278,36 @@ function connectStream() {
   });
 
   eventSource.onerror = () => {
-    statusText.textContent = "Reconnecting...";
+    statusText.textContent = "Disconnected";
+
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+
+    allEvents = [];
+    allAlerts = [];
+    openedJson.clear();
+
+    renderEvents([]);
+    renderAlerts([]);
+    updateStats([], []);
+    statLastUpdate.textContent = "—";
   };
 }
 
+//fix web update-a
 function toggleJson(id) {
   const el = document.getElementById(id);
   if (!el) return;
+
   el.classList.toggle("open");
+
+  if (el.classList.contains("open")) {
+    openedJson.add(id);
+  } else {
+    openedJson.delete(id);
+  }
 }
 
 window.toggleJson = toggleJson;
@@ -292,4 +317,6 @@ severityFilter.addEventListener("change", applyFilters);
 limitInput.addEventListener("change", loadData);
 refreshBtn.addEventListener("click", loadData);
 
-setInterval(loadData, 3000);
+loadData().then(() => {
+  connectStream();
+});
