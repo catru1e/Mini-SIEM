@@ -17,6 +17,7 @@
 #include "db_sqlite.hpp"
 #include "detect.hpp"
 #include "correlate.hpp"
+#include "config.hpp"
 
 using json = nlohmann::json;
 
@@ -86,6 +87,12 @@ static std::string sse_message(const std::string& event_name, const json& payloa
 	 "data: " + payload.dump() + "\n\n";
 }
 
+static int clamp_limit(int requested, int def, int max_value) {
+  if (requested <- 0) return def;
+  if (requested > max_value) return max_value;
+  return requested;
+}
+
 struct SseClient {
   std::mutex mutex;
   std::deque<std::string> queue;
@@ -99,9 +106,11 @@ int main() {
     std::filesystem::create_directories("logs");
     std::filesystem::create_directories("web");
 
-    SqliteDb db("data/events.db");
+    const AppConfig config = ConfigLoader::load_from_file("config/config.json");
+
+    SqliteDb db(config.server.db_path);
     db.init();
-    DetectionEngine detector(db);
+    DetectionEngine detector(db, config.detection);
     CorrelationEngine correlator(db);
 
     httplib::Server srv;
@@ -291,14 +300,15 @@ int main() {
 
     // Get last events
     srv.Get("/api/events", [&](const httplib::Request& req, httplib::Response& res) {
-      int limit = 100;
+      int limit = config.dashboard.events_limit_default;
       if (req.has_param("limit")) {
         try {
           limit = std::stoi(req.get_param_value("limit"));
         } catch (...) {
-          limit = 100;
+          limit = config.dashboard.events_limit_default;
         }
       }
+      limit = clamp_limit(limit, config.dashboard.events_limit_default, config.dashboard.events_limit_max);
 
       auto rows = db.get_last_events(limit);
 
@@ -332,14 +342,15 @@ int main() {
 
     // Get last alerts
     srv.Get("/api/alerts", [&](const httplib::Request& req, httplib::Response& res) {
-      int limit = 100;
+      int limit = config.dashboard.alerts_limit_default;
       if (req.has_param("limit")) {
         try {
           limit = std::stoi(req.get_param_value("limit"));
         } catch (...) {
-          limit = 100;
+          limit = config.dashboard.alerts_limit_default;
         }
       }
+      limit = clamp_limit(limit, config.dashboard.alerts_limit_default, config.dashboard.alerts_limit_max);
 
       auto rows = db.get_last_alerts(limit);
 
@@ -369,8 +380,9 @@ int main() {
       res.status = 200;
     });
 
-    std::cout << "[mini-siem-server] listening on http://127.0.0.1:8080\n";
-    srv.listen("127.0.0.1", 8080);
+    std::cout << "[mini-siem-server] listening on http://"
+              << config.server.host << ":" << config.server.port << "\n";
+    srv.listen(config.server.host.c_str(), config.server.port);
   } catch (const std::exception& e) {
     std::cerr << "Fatal: " << e.what() << "\n";
     return 1;

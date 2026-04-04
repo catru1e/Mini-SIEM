@@ -17,6 +17,7 @@
 #include "auth_parser.hpp"
 #include "process_snapshot.hpp"
 #include "file_monitor.hpp"
+#include "config.hpp"
 
 using json = nlohmann::json;
 
@@ -50,19 +51,23 @@ static std::string get_hostname_safe() {
   return "unknown-host";
 }
 
-static void append_agent_log(const std::string& line) {
-  std::filesystem::create_directories("logs");
-  std::ofstream out("logs/agent.log", std::ios::app);
+static void append_agent_log(const std::string& log_path, const std::string& line) {
+  std::filesystem::path p(log_path);
+  if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
+
+  std::ofstream out(log_path, std::ios::app);
   out << line << "\n";
 }
 
-static std::string choose_log_source() {
-  if (std::filesystem::exists("logs/demo_auth.log"))
-    return "logs/demo_auth.log";
-
-  if (std::filesystem::exists("/var/log/auth.log"))
-    return "/var/log/auth.log";
-
+static std::string choose_log_source(const std::vector<std::string>& log_paths) {
+  for (const auto& path : log_paths) {
+    if (std::filesystem::exists(path)) {
+      return path;
+    }
+  }
+  if (!log_paths.empty()) {
+    return log_paths.front();
+  }
   return "logs/demo_auth.log";
 }
 
@@ -84,14 +89,18 @@ int main() {
     std::filesystem::create_directories("logs");
     std::filesystem::create_directories("data");
 
-    HttpClient client("127.0.0.1", 8080);
+    const AppConfig config = ConfigLoader::load_from_file("config/config.json");
+
+    HttpClient client(config.server.host, config.server.port);
 
     const std::string host = get_hostname_safe();
-    const std::string log_path = choose_log_source();
-    const std::string ssh_watch_path = choose_ssh_watch_path();
+    const std::string log_path = choose_log_source(config.agent.log_paths);
+    const std::string ssh_watch_path = config.agent.ssh_watch_path;
+    const std::string state_path = config.agent.state_path;
+    const std::string agent_log_path = config.agent.agent_log_path;
 
     LogReader reader(log_path);
-    StateStore state_store("data/agent_state.json");
+    StateStore state_store(state_path);
     AuthParser auth_parser;
     ProcessSnapshot process_snapshot;
     FileMonitor file_monitor;
@@ -114,16 +123,16 @@ int main() {
     if (std::filesystem::exists(ssh_watch_path) && std::filesystem::is_directory(ssh_watch_path)) {
       file_monitor_ready = file_monitor.init(ssh_watch_path);
       if(file_monitor_ready) {
-	append_agent_log("file monitor started, path=" + ssh_watch_path);
+	append_agent_log(agent_log_path, "file monitor started, path=" + ssh_watch_path);
       } else {
-	append_agent_log("file monitor failed to start, path=" + ssh_watch_path);
+	append_agent_log(agent_log_path, "file monitor failed to start, path=" + ssh_watch_path);
       }
     } else {
-      append_agent_log("file monitor path not found: " + ssh_watch_path);
+      append_agent_log(agent_log_path, "file monitor path not found: " + ssh_watch_path);
     }
 
     std::cout << "[mini-siem-agent] started, reading log: " << log_path << "\n";
-    append_agent_log("agent started, source=" + log_path);
+    append_agent_log(agent_log_path, "agent started, source=" + log_path);
 
     while (true) {
       // ------- process snapshot monitoring -------
@@ -160,13 +169,13 @@ int main() {
 				std::to_string(proc.pid) +
 				" process_name=" + proc.process_name;
 	      std::cout << msg << "\n";
-	      append_agent_log(msg);
+	      append_agent_log(agent_log_path, msg);
 	    } else {
 	      std::string msg = "[ERR] failed to send process_start pid=" +
 				std::to_string(proc.pid) +
 				" response=" + response_text;
 	      std::cerr << msg << "\n";
-	      append_agent_log(msg);
+	      append_agent_log(agent_log_path, msg);
 	    }
 	  }
 	}
@@ -176,7 +185,7 @@ int main() {
 
 	if (!process_baseline_initialized) {
 	  process_baseline_initialized = true;
-	  append_agent_log("process baseline initialized");
+	  append_agent_log(agent_log_path, "process baseline initialized");
 	}
       }
 
@@ -204,20 +213,20 @@ int main() {
 	    std::string msg = "[OK] sent " + fe.event_type +
 			      " path=" + fe.full_path;
 	    std::cout << msg << "\n";
-	    append_agent_log(msg);
+	    append_agent_log(agent_log_path, msg);
 	  } else {
 	    std::string msg = "[ERR] failed to send " + fe.event_type +
 			      " response=" + response_text +
 			      " path=" + fe.full_path;
 	    std::cerr << msg << "\n";
-	    append_agent_log(msg);
+	    append_agent_log(agent_log_path, msg);
 	  }
 	}
       }
 
       // --------- auth.log monitoring --------
       if (!reader.exists()) {
-        append_agent_log("log file not found yet: " + log_path);
+        append_agent_log(agent_log_path, "log file not found yet: " + log_path);
         std::this_thread::sleep_for(std::chrono::seconds(2));
         continue;
       }
@@ -263,7 +272,7 @@ int main() {
 			    " raw=" + item.text;
 
           std::cout << msg << "\n";
-          append_agent_log(msg);
+          append_agent_log(agent_log_path, msg);
         }
         else {
 	  std::string msg = "[ERR] failed to send event_type=" +
@@ -272,7 +281,7 @@ int main() {
 			    " raw=" + item.text;
 
           std::cerr << msg << "\n";
-          append_agent_log(msg);
+          append_agent_log(agent_log_path, msg);
           break;
         }
       }

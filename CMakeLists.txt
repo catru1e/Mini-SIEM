@@ -13,6 +13,11 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
+# Config
+set(COMMON_SOURCES
+  common/src/config.cpp
+)
+
 # ---- server ----
 add_executable(mini_siem_server
   server/src/main.cpp
@@ -22,6 +27,7 @@ add_executable(mini_siem_server
   server/src/detect.hpp
   server/src/correlate.cpp
   server/src/correlate.hpp
+  ${COMMON_SOURCES}
 )
 
 target_link_libraries(mini_siem_server PRIVATE sqlite3)
@@ -38,5 +44,6 @@ add_executable(mini_siem_agent
   agent/src/process_snapshot.hpp
   agent/src/file_monitor.cpp
   agent/src/file_monitor.hpp
+  ${COMMON_SOURCES}
 )
 

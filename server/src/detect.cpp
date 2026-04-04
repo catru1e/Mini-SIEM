@@ -46,16 +46,39 @@ std::string minutes_ago_iso_utc(int minutes) {
                 static_cast<long long>(ms));
   return std::string(buf);
 }
+std::string seconds_ago_iso_utc(int seconds) {
+  using namespace std::chrono;
+  auto now = system_clock::now() - std::chrono::seconds(seconds);
+  auto secs = time_point_cast<std::chrono::seconds>(now);
+  auto ms = duration_cast<milliseconds>(now - secs).count();
+  std::time_t t = system_clock::to_time_t(now);
+  std::tm tm{};
+  gmtime_r(&t, &tm);
+
+  char buf[64];
+  std::snprintf(buf, sizeof(buf),
+                "%04d-%02d-%02dT%02d:%02d:%02d.%03lldZ",
+                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                tm.tm_hour, tm.tm_min, tm.tm_sec,
+                static_cast<long long>(ms));
+  return std::string(buf);
+}
 std::string safe_string(const json& j, const char* key, const std::string& def = "") {
   if (!j.contains(key) || j[key].is_null()) return def;
   if (j[key].is_string()) return j[key].get<std::string>();
   return j[key].dump();
 }
 
+int seconds_to_minutes_rounded_up(int seconds){
+  if (seconds <= 0) return 0;
+  return (seconds +59) / 60;
+}
+
 } //NAMESPACE END
 
 
-DetectionEngine::DetectionEngine(SqliteDb& db) : db_(db) {}
+DetectionEngine::DetectionEngine(SqliteDb& db, DetectionConfig config)
+   : db_(db), config_(std::move(config)) {}
 
 std::vector<json> DetectionEngine::process_event(const json& event) {
   std::vector<json> alerts;
@@ -108,13 +131,15 @@ json DetectionEngine::detect_failed_login_by_ip(const json& event) {
   const std::string src_ip = safe_string(event, "src_ip", "");
   if (src_ip.empty()) return nullptr;
 
-  const std::string since_ts = minutes_ago_iso_utc(5);
+  const int window_seconds = config_.failed_login_window_seconds;
+  const int threshold = config_.failed_login_threshold;
+  const std::string since_ts = minutes_ago_iso_utc(window_seconds);
   const long long count = db_.count_auth_failed_by_src_ip_since(src_ip, since_ts);
 
   std::cerr << "[detect] ip rule src_ip=" << src_ip
           << " count=" << count
           << " since=" << since_ts << "\n";
-  if (count < 5) return nullptr;
+  if (count < threshold) return nullptr;
 
   const std::string now = now_iso_utc();
   const std::string rule_name = "failed_login_threshold_by_ip";
@@ -122,9 +147,8 @@ json DetectionEngine::detect_failed_login_by_ip(const json& event) {
   const std::string title = "Multiple failed logins from one IP";
 
   std::ostringstream desc;
-  desc << "Detected " << count << " failed login attempts from IP " << src_ip 
-       << " within the last 5 minutes.";
-
+  desc << "Detected " << count << " failed login attempts from IP " << src_ip
+       << " within the last " << window_seconds << " seconds.";
   return json {
     {"ts", now},
     {"rule_name", rule_name},
@@ -133,23 +157,25 @@ json DetectionEngine::detect_failed_login_by_ip(const json& event) {
     {"description", desc.str()},
     {"src_ip", src_ip},
     {"count", count},
-    {"window_minutes", 5}
+    {"threshold", threshold},
+    {"window_seconds", window_seconds},
+    {"window_minutes", seconds_to_minutes_rounded_up(window_seconds)}
   };
-
-  //db_.insert_alert(now, rule_name, severity, title, desc.str(), alert.dump());
 }
 
 json DetectionEngine::detect_failed_login_by_user(const json& event) {
   const std::string user = safe_string(event, "user", "");
   if (user.empty()) return nullptr;
 
-  const std::string since_ts = minutes_ago_iso_utc(5);
+  const int window_seconds = config_.failed_login_window_seconds;
+  const int threshold = config_.failed_login_threshold;
+  const std::string since_ts = minutes_ago_iso_utc(window_seconds);
   const long long count = db_.count_auth_failed_by_user_since(user, since_ts);
 
   std::cerr << "[detect] user rule user=" << user
           << " count=" << count
           << " since=" << since_ts << "\n";
-  if (count < 5) return nullptr;
+  if (count < threshold) return nullptr;
 
   const std::string now = now_iso_utc();
   const std::string rule_name = "failed_login_threshold_by_user";
@@ -158,7 +184,7 @@ json DetectionEngine::detect_failed_login_by_user(const json& event) {
 
   std::ostringstream desc;
   desc << "Detected " << count << " failed login attempts from user " << user
-       << " within the last 5 minutes.";
+       << " within the last " << window_seconds << " seconds.";
 
   return json {
     {"ts", now},
@@ -168,23 +194,25 @@ json DetectionEngine::detect_failed_login_by_user(const json& event) {
     {"description", desc.str()},
     {"user", user},
     {"count", count},
-    {"window_minutes", 5}
+    {"threshold", threshold},
+    {"window_seconds", window_seconds},
+    {"window_minutes", seconds_to_minutes_rounded_up(window_seconds)}
   };
-
- // db_.insert_alert(now, rule_name, severity, title, desc.str(), alert.dump());
 }
 
 json DetectionEngine::detect_invalid_user_by_ip(const json& event) {
   const std::string src_ip = safe_string(event, "src_ip", "");
   if (src_ip.empty()) return nullptr;
 
-  const std::string since_ts = minutes_ago_iso_utc(5);
+  const int window_seconds = config_.invalid_user_window_seconds;
+  const int threshold = config_.invalid_user_threshold;
+  const std::string since_ts = minutes_ago_iso_utc(window_seconds);
   const long long count = db_.count_auth_invalid_user_by_src_ip_since(src_ip, since_ts);
 
   std::cerr << "[detect] invalid-user rule src_ip=" << src_ip
             << " count=" << count
             << " since=" << since_ts << "\n";
-  if (count < 5) return nullptr;
+  if (count < threshold) return nullptr;
 
   const std::string now = now_iso_utc();
   const std::string rule_name = "invalid_user_threshold_by_ip";
@@ -193,7 +221,7 @@ json DetectionEngine::detect_invalid_user_by_ip(const json& event) {
 
   std::ostringstream desc;
   desc << "Detected " << count << " invalid-user login attempts from IP " << src_ip
-       << " within the last 5 minutes.";
+       << " within the last " << window_seconds << " seconds.";
 
   return json {
     {"ts", now},
@@ -203,23 +231,25 @@ json DetectionEngine::detect_invalid_user_by_ip(const json& event) {
     {"description", desc.str()},
     {"src_ip", src_ip},
     {"count", count},
-    {"window_minutes", 5}
+    {"threshold", threshold},
+    {"window_seconds", window_seconds},
+    {"window_minutes", seconds_to_minutes_rounded_up(window_seconds)}
   };
-
-  //db_.insert_alert(now, rule_name, severity, title, desc.str(), alert.dump());
 }
 
 json DetectionEngine::detect_suspicious_sudo_by_user(const json& event) {
   const std::string user = safe_string(event, "user", "");
   if (user.empty()) return nullptr;
 
-  const std::string since_ts = minutes_ago_iso_utc(5);
+  const int window_seconds = config_.sudo_window_seconds;
+  const int threshold = config_.sudo_threshold;
+  const std::string since_ts = seconds_ago_iso_utc(window_seconds);
   const long long count = db_.count_privilege_escalation_by_user_since(user, since_ts);
 
   std::cerr << "[detect] sudo rule user=" << user
             << " count=" << count
             << " since=" << since_ts << "\n";
-  if (count < 3) return nullptr;
+  if (count < threshold) return nullptr;
 
   const std::string now = now_iso_utc();
   const std::string rule_name = "suspicious_sudo_usage_by_user";
@@ -228,7 +258,7 @@ json DetectionEngine::detect_suspicious_sudo_by_user(const json& event) {
 
   std::ostringstream desc;
   desc << "Detected " << count << " privilege escalation events for user " << user
-       << " within the last 5 minutes.";
+       << " within the last " << window_seconds << " seconds.";
 
   return json {
     {"ts", now},
@@ -238,23 +268,25 @@ json DetectionEngine::detect_suspicious_sudo_by_user(const json& event) {
     {"description", desc.str()},
     {"user", user},
     {"count", count},
-    {"window_minutes", 5}
+    {"threshold", threshold},
+    {"window_seconds", window_seconds},
+    {"window_minutes", seconds_to_minutes_rounded_up(window_seconds)}
   };
-
-  //db_.insert_alert(now, rule_name, severity, title, desc.str(), alert.dump());
 }
 
 json DetectionEngine::detect_too_frequent_logins_by_user(const json& event) {
   const std::string user = safe_string(event, "user", "");
   if (user.empty()) return nullptr;
 
-  const std::string since_ts = minutes_ago_iso_utc(2);
+  const int window_seconds = config_.success_login_window_seconds;
+  const int threshold = config_.success_login_threshold;
+  const std::string since_ts = seconds_ago_iso_utc(window_seconds);
   const long long count = db_.count_auth_success_by_user_since(user, since_ts);
 
   std::cerr << "[detect] success-frequency rule user=" << user
             << " count=" << count
             << " since=" << since_ts << "\n";
-  if (count < 10) return nullptr;
+  if (count < threshold) return nullptr;
 
   const std::string now = now_iso_utc();
   const std::string rule_name = "too_frequent_logins_by_user";
@@ -263,7 +295,7 @@ json DetectionEngine::detect_too_frequent_logins_by_user(const json& event) {
 
   std::ostringstream desc;
   desc << "Detected " << count << " successful logins for user " << user
-       << " within the last 2 minutes.";
+       << " within the last " << window_seconds << " seconds.";
 
   return json {
     {"ts", now},
@@ -273,10 +305,10 @@ json DetectionEngine::detect_too_frequent_logins_by_user(const json& event) {
     {"description", desc.str()},
     {"user", user},
     {"count", count},
-    {"window_minutes", 2}
+    {"threshold", threshold},
+    {"window_seconds", window_seconds},
+    {"window_minutes", seconds_to_minutes_rounded_up(window_seconds)}
   };
-
-  //db_.insert_alert(now, rule_name, severity, title, desc.str(), alert.dump());
 }
 
 json DetectionEngine::detect_blacklisted_process(const json& event) {
@@ -285,15 +317,8 @@ json DetectionEngine::detect_blacklisted_process(const json& event) {
 
   if (process_name.empty()) return nullptr;
 
-  static const std::vector<std::string> blacklist = {
-    "nc",
-    "netcat",
-    "ncat",
-    "socat"
-  };
-
   bool matched = false;
-  for (const auto& bad : blacklist) {
+  for (const auto& bad : config_.blacklisted_processes) {
     if (process_name == bad) {
       matched = true;
       break;
