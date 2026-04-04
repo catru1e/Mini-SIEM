@@ -5,6 +5,12 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <thread>
+#include <vector>
+#include <mutex>
+#include <algorithm>
+#include <deque>
+#include <memory>
 
 #include "httplib.h"
 #include "json.hpp"
@@ -50,6 +56,42 @@ static bool read_file(const std::string& path, std::string& out) {
   return true;
 }
 
+static json make_event_response_item(long long id, const json& original) {
+  return json {
+    {"id", id},
+    {"ts", safe_string(original, "ts", "")},
+    {"received_at", now_iso_utc()},
+    {"host", safe_string(original, "host", "unknown")},
+    {"event_type", safe_string(original, "event_type", "unknown")},
+    {"source", safe_string(original, "source", "unknown")},
+    {"severity", safe_string(original, "severity", "info")},
+    {"event", original}
+  };
+}
+
+static json make_alert_response_item(const json& alert) {
+  return json {
+    {"id", 0},
+    {"ts", safe_string(alert, "ts", "")},
+    {"rule_name", safe_string(alert, "rule_name", "")},
+    {"severity", safe_string(alert, "severity", "")},
+    {"title", safe_string(alert, "title", "Alert")},
+    {"description", safe_string(alert, "description", "")},
+    {"alert", alert}
+  };
+}
+
+static std::string sse_message(const std::string& event_name, const json& payload){
+  return "event: " + event_name + "\n" +
+	 "data: " + payload.dump() + "\n\n";
+}
+
+struct SseClient {
+  std::mutex mutex;
+  std::deque<std::string> queue;
+  bool active = true;
+};
+
 int main() {
   try {
     // Важно: относительный путь => работает с флешки
@@ -63,6 +105,22 @@ int main() {
     CorrelationEngine correlator(db);
 
     httplib::Server srv;
+
+    std::mutex clients_mutex;
+    std::vector<std::shared_ptr<SseClient>> sse_clients;
+
+    auto broadcast_sse = [&](const std::string& event_name, const json& payload) {
+      const std::string msg = sse_message(event_name, payload);
+
+      std::lock_guard<std::mutex> lock(clients_mutex);
+      for (auto& client : sse_clients) {
+	if (!client) continue;
+	std::lock_guard<std::mutex> client_lock(client->mutex);
+	if (client->active) {
+	  client->queue.push_back(msg);
+	}
+      }
+    };
 
     // Healthcheck
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
@@ -87,6 +145,7 @@ int main() {
       if (!read_file("web/app.js", content)){
 	res.status = 404;
 	res.set_content("web/app.js not found\n", "text/plain");
+        return;
       }
       res.set_content(content, "application/javascript; charset=UTF-8");
     });
@@ -102,6 +161,70 @@ int main() {
       res.set_content(content, "text/css; charset=UTF-8");
     });
 
+    srv.Get("/stream", [&](const httplib::Request&, httplib::Response& res){
+      res.set_header("Cache-Control", "no-cache");
+      res.set_header("Connection", "keep-alive");
+      res.set_header("X-Accel-Buffering", "no");
+
+      auto client = std::make_shared<SseClient>();
+
+      {
+	std::lock_guard<std::mutex> lock(clients_mutex);
+	sse_clients.push_back(client);
+      }
+
+      res.set_chunked_content_provider(
+	"text/event-stream",
+	[&, client](size_t, httplib::DataSink& sink) {
+	  {
+	    std::lock_guard<std::mutex> lock(clients_mutex);
+	    client->queue.push_back("event: hello\ndata: {\"status\":\"connected\"}\n\n");
+	  }
+
+	  while (sink.is_writable()) {
+	    std::string next_message;
+
+	    {
+	      std::lock_guard<std::mutex> lock(client->mutex);
+	      if (!client->queue.empty()) {
+		next_message = std::move(client->queue.front());
+		client->queue.pop_front();
+	      }
+	    }
+	    if (!next_message.empty()) {
+	      if (!sink.write(next_message.c_str(), next_message.size())) {
+		break;
+	      }
+	    } else {
+	      const std::string heartbeat = ": ping\n\n";
+	      if (!sink.write(heartbeat.c_str(), heartbeat.size())) {
+		break;
+	      }
+	      std::this_thread::sleep_for(std::chrono::seconds(2));
+	    }
+	  }
+	  {
+	    std::lock_guard<std::mutex> lock(client->mutex);
+	    client->active = false;
+	  }
+	  {
+	    std::lock_guard<std::mutex> lock(clients_mutex);
+	    auto it = std::remove_if(
+	      sse_clients.begin(),
+	      sse_clients.end(),
+	      [&](const std::shared_ptr<SseClient>& c) {
+		return !c || c == client;
+	      }
+	    );
+	    sse_clients.erase(it, sse_clients.end());
+	  }
+
+	  sink.done();
+	  return false;
+	}
+      );
+    });
+
     // Ingest endpoint
     srv.Post("/ingest", [&](const httplib::Request& req, httplib::Response& res) {
       try {
@@ -112,14 +235,43 @@ int main() {
         std::string event_type = safe_string(j, "event_type", "unknown");
         std::string source = safe_string(j, "source", "unknown");
 
+	if (!j.contains("ts")) j["ts"] = ts;
+	if (!j.contains("event_type")) j["event_type"] = event_type;
+	if (!j.contains("source")) j["source"] = source;
+
         // Канонизируем json (храним строкой)
         std::string body = j.dump();
 
         db.insert_event(ts, event_type, source, body);
 
+	broadcast_sse("event", make_event_response_item(0, j));
+
 	try {
-	  detector.process_event(j);
-	  correlator.process_event(j);
+	  auto detected_alerts = detector.process_event(j);
+	  for (const auto& alert : detected_alerts){
+	    db.insert_alert(
+	      safe_string(alert, "ts", now_iso_utc()),
+              safe_string(alert, "rule_name", "unknown_rule"),
+              safe_string(alert, "severity", "info"),
+              safe_string(alert, "title", "Alert"),
+              safe_string(alert, "description", ""),
+              alert.dump()
+            );
+	    broadcast_sse("alert", make_alert_response_item(alert));
+	  }
+
+      	  auto correlated_alerts = correlator.process_event(j);
+	  for (const auto& alert : correlated_alerts){
+	    db.insert_alert(
+	      safe_string(alert, "ts", now_iso_utc()),
+              safe_string(alert, "rule_name", "unknown_rule"),
+              safe_string(alert, "severity", "info"),
+              safe_string(alert, "title", "Alert"),
+              safe_string(alert, "description", ""),
+              alert.dump()
+            );
+	    broadcast_sse("alert", make_alert_response_item(alert));
+	  }
 	} catch (const std::exception& e) {
 	  std::cerr << "[detect][ERR] " << e.what() << "\n";
 	} catch (...){

@@ -16,6 +16,7 @@ const refreshBtn = document.getElementById("refreshBtn");
 
 let allEvents = [];
 let allAlerts = [];
+let eventSource = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -65,7 +66,7 @@ function renderEvents(items) {
   }
 
   eventsList.innerHTML = items.map(item => {
-    const rawId = `event-json-${item.id}`;
+    const rawId = `event-json-${item.id}-${Math.random().toString(36).slice(2)}`;
     return `
       <div class="item-card">
         <div class="item-top">
@@ -79,7 +80,7 @@ function renderEvents(items) {
           ${createMetaItem("Host", item.host || "unknown")}
           ${createMetaItem("Source", item.source || "unknown")}
           ${createMetaItem("Severity", item.severity || "info")}
-          ${createMetaItem("Event ID", item.id)}
+          ${createMetaItem("Event ID", item.id ?? "live")}
         </div>
 
         <div>
@@ -104,7 +105,7 @@ function renderAlerts(items) {
   }
 
   alertsList.innerHTML = items.map(item => {
-    const rawId = `alert-json-${item.id}`;
+    const rawId = `alert-json-${item.id}-${Math.random().toString(36).slice(2)}`;
     return `
       <div class="item-card">
         <div class="item-top">
@@ -117,7 +118,7 @@ function renderAlerts(items) {
         <div class="meta-grid">
           ${createMetaItem("Rule", item.rule_name || "—")}
           ${createMetaItem("Severity", item.severity || "—")}
-          ${createMetaItem("Alert ID", item.id)}
+          ${createMetaItem("Alert ID", item.id ?? "live")}
           ${createMetaItem("Type", "Detection/Correlation")}
         </div>
 
@@ -190,6 +191,25 @@ async function fetchJson(url) {
   return response.json();
 }
 
+function trimToLimit(items, limit) {
+  const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+  return items.slice(0, safeLimit);
+}
+
+function addLiveEvent(item) {
+  allEvents = [item, ...allEvents];
+  allEvents = trimToLimit(allEvents, limitInput.value);
+  populateFilters(allEvents, allAlerts);
+  applyFilters();
+}
+
+function addLiveAlert(item) {
+  allAlerts = [item, ...allAlerts];
+  allAlerts = trimToLimit(allAlerts, limitInput.value);
+  populateFilters(allEvents, allAlerts);
+  applyFilters();
+}
+
 async function loadData() {
   try {
     statusText.textContent = "Updating...";
@@ -218,6 +238,47 @@ async function loadData() {
   }
 }
 
+function connectStream() {
+  if (eventSource) {
+    eventSource.close();
+  }
+
+  statusText.textContent = "Connecting live stream...";
+  eventSource = new EventSource("/stream");
+
+  eventSource.addEventListener("open", () => {
+    statusText.textContent = "Live";
+  });
+
+  eventSource.addEventListener("hello", () => {
+    statusText.textContent = "Live";
+  });
+
+  eventSource.addEventListener("event", (e) => {
+    try {
+      const item = JSON.parse(e.data);
+      addLiveEvent(item);
+      statLastUpdate.textContent = new Date().toLocaleTimeString();
+    } catch (err) {
+      console.error("Failed to parse event SSE payload", err);
+    }
+  });
+
+  eventSource.addEventListener("alert", (e) => {
+    try {
+      const item = JSON.parse(e.data);
+      addLiveAlert(item);
+      statLastUpdate.textContent = new Date().toLocaleTimeString();
+    } catch (err) {
+      console.error("Failed to parse alert SSE payload", err);
+    }
+  });
+
+  eventSource.onerror = () => {
+    statusText.textContent = "Reconnecting...";
+  };
+}
+
 function toggleJson(id) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -231,5 +292,4 @@ severityFilter.addEventListener("change", applyFilters);
 limitInput.addEventListener("change", loadData);
 refreshBtn.addEventListener("click", loadData);
 
-loadData();
 setInterval(loadData, 3000);

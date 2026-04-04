@@ -1,21 +1,25 @@
 #pragma once
 
+#include <vector>
+
 #include "db_sqlite.hpp"
 #include "json.hpp"
 
 class DetectionEngine {
 public:
+  using json = nlohmann::json;
+
   explicit DetectionEngine(SqliteDb& db);
 
-  void process_event(const nlohmann::json& event);
+  std::vector<json> process_event(const json& event);
 
 private:
   SqliteDb& db_;
 
-  void detect_failed_login_by_ip(const nlohmann::json& event);
-  void detect_failed_login_by_user(const nlohmann::json& event);
+  json detect_failed_login_by_ip(const json& event);
+  json detect_failed_login_by_user(const json& event);
 
-  void detect_invalid_user_by_ip(const nlohmann::json& event);
-  void detect_suspicious_sudo_by_user(const nlohmann::json& event);
-  void detect_too_frequent_logins_by_user(const nlohmann::json& event);
+  json detect_invalid_user_by_ip(const json& event);
+  json detect_suspicious_sudo_by_user(const json& event);
+  json detect_too_frequent_logins_by_user(const json& event);
 };

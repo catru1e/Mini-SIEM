@@ -1,16 +1,20 @@
 #pragma once
 
+#include <vector>
+
 #include "db_sqlite.hpp"
 #include "json.hpp"
 
 class CorrelationEngine {
 public:
+  using json = nlohmann::json;
+
   explicit CorrelationEngine(SqliteDb& db);
 
-  void process_event(const nlohmann::json& event);
+  std::vector<json> process_event(const json& event);
 
 private:
   SqliteDb& db_;
 
-  void correlate_bruteforce_success(const nlohmann::json& event);
+  json correlate_bruteforce_success(const json& event);
 };
