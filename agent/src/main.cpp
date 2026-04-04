@@ -51,12 +51,58 @@ static std::string get_hostname_safe() {
   return "unknown-host";
 }
 
-static void append_agent_log(const std::string& log_path, const std::string& line) {
-  std::filesystem::path p(log_path);
-  if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
-  std::ofstream out(log_path, std::ios::app);
-  out << line << "\n";
+//updated and better
+enum class AgentLogLevel {
+  Info,
+  Warn,
+  Error
+};
+
+static const char* to_string(AgentLogLevel level) {
+  switch (level) {
+    case AgentLogLevel::Info:  return "INFO";
+    case AgentLogLevel::Warn:  return "WARN";
+    case AgentLogLevel::Error: return "ERROR";
+  }
+  return "INFO";
+}
+
+static void append_agent_log(const std::string& log_path,
+			     AgentLogLevel level,
+			     const std::string& message) {
+  if (log_path.empty()) return;
+  if (message.empty()) return;
+  try {
+    std::filesystem::path p(log_path);
+
+    if (p.filename().empty()) return;
+
+    if (p.has_parent_path()) {
+      std::filesystem::create_directories(p.parent_path());
+    }
+
+    std::ofstream out(log_path, std::ios::app);
+    if (!out.is_open()) {
+      return;
+    }
+
+    out << now_iso_utc()
+	<< " [" << to_string(level) << "] "
+	<< message << "\n";
+  } catch (...) {
+    // chto bi agent ne upal
+  }
+}
+
+static void log_agent_info(const std::string& log_path, const std::string& message) {
+  append_agent_log(log_path, AgentLogLevel::Info, message);
+}
+static void log_agent_warn(const std::string& log_path, const std::string& message){
+  append_agent_log(log_path, AgentLogLevel::Warn, message);
+}
+static void log_agent_error(const std::string& log_path, const std::string& message) {
+  append_agent_log(log_path, AgentLogLevel::Error, message);
 }
 
 static std::string choose_log_source(const std::vector<std::string>& log_paths) {
@@ -118,21 +164,23 @@ int main() {
     }
 
     bool process_baseline_initialized = !state.known_processes.empty();
+    bool log_missing_reported = false;
+    bool log_recovered_reported = false;
 
     bool file_monitor_ready = false;
     if (std::filesystem::exists(ssh_watch_path) && std::filesystem::is_directory(ssh_watch_path)) {
       file_monitor_ready = file_monitor.init(ssh_watch_path);
-      if(file_monitor_ready) {
-	append_agent_log(agent_log_path, "file monitor started, path=" + ssh_watch_path);
+      if (file_monitor_ready) {
+  	log_agent_info(agent_log_path, "file monitor started, path=" + ssh_watch_path);
       } else {
-	append_agent_log(agent_log_path, "file monitor failed to start, path=" + ssh_watch_path);
+  	log_agent_warn(agent_log_path, "file monitor failed to start, path=" + ssh_watch_path);
       }
     } else {
-      append_agent_log(agent_log_path, "file monitor path not found: " + ssh_watch_path);
+      log_agent_warn(agent_log_path, "file monitor path not found: " + ssh_watch_path);
     }
 
     std::cout << "[mini-siem-agent] started, reading log: " << log_path << "\n";
-    append_agent_log(agent_log_path, "agent started, source=" + log_path);
+    log_agent_info(agent_log_path, "agent started, source=" + log_path);
 
     while (true) {
       // ------- process snapshot monitoring -------
@@ -169,13 +217,13 @@ int main() {
 				std::to_string(proc.pid) +
 				" process_name=" + proc.process_name;
 	      std::cout << msg << "\n";
-	      append_agent_log(agent_log_path, msg);
+	      log_agent_info(agent_log_path, msg);
 	    } else {
 	      std::string msg = "[ERR] failed to send process_start pid=" +
 				std::to_string(proc.pid) +
 				" response=" + response_text;
 	      std::cerr << msg << "\n";
-	      append_agent_log(agent_log_path, msg);
+	      log_agent_error(agent_log_path, msg);
 	    }
 	  }
 	}
@@ -185,7 +233,7 @@ int main() {
 
 	if (!process_baseline_initialized) {
 	  process_baseline_initialized = true;
-	  append_agent_log(agent_log_path, "process baseline initialized");
+	  log_agent_info(agent_log_path, "process baseline initialized");
 	}
       }
 
@@ -213,22 +261,32 @@ int main() {
 	    std::string msg = "[OK] sent " + fe.event_type +
 			      " path=" + fe.full_path;
 	    std::cout << msg << "\n";
-	    append_agent_log(agent_log_path, msg);
+	    log_agent_info(agent_log_path, msg);
 	  } else {
 	    std::string msg = "[ERR] failed to send " + fe.event_type +
 			      " response=" + response_text +
 			      " path=" + fe.full_path;
 	    std::cerr << msg << "\n";
-	    append_agent_log(agent_log_path, msg);
+	    log_agent_error(agent_log_path, msg);
 	  }
 	}
       }
 
       // --------- auth.log monitoring --------
       if (!reader.exists()) {
-        append_agent_log(agent_log_path, "log file not found yet: " + log_path);
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        continue;
+	if (!log_missing_reported) {
+	  log_agent_warn(agent_log_path, "log file not found yet: " + log_path);
+	  log_missing_reported = true;
+	  log_recovered_reported = false;
+	}
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+	continue;
+      }
+
+      if (log_missing_reported && !log_recovered_reported) {
+	log_agent_info(agent_log_path, "log file became available again: " + log_path);
+	log_recovered_reported = true;
+	log_missing_reported = false;
       }
 
       auto lines = reader.read_new_lines(state.offset, 100);
@@ -272,7 +330,7 @@ int main() {
 			    " raw=" + item.text;
 
           std::cout << msg << "\n";
-          append_agent_log(agent_log_path, msg);
+          log_agent_info(agent_log_path, msg);
         }
         else {
 	  std::string msg = "[ERR] failed to send event_type=" +
@@ -281,7 +339,7 @@ int main() {
 			    " raw=" + item.text;
 
           std::cerr << msg << "\n";
-          append_agent_log(agent_log_path, msg);
+          log_agent_error(agent_log_path, msg);
           break;
         }
       }
