@@ -36,6 +36,23 @@ AgentState StateStore::load() const {
             auto v = j["offset"].get<long long>();
             state.offset = v >= 0 ? static_cast<std::uint64_t>(v) : 0;
         }
+
+	if (j.contains("known_processes") && j["known_processes"].is_array()) {
+	    for (const auto& item : j["known_processes"]) {
+	        if (!item.is_object()) continue;
+		ProcessStateEntry entry;
+		if (item.contains("pid") && item["pid"].is_number_integer()) {
+		    entry.pid = item["pid"].get<int>();
+		} else {
+		    continue;
+		}
+
+		if (item.contains("process_name") && item["process_name"].is_string()) {
+		    entry.process_name = item["process_name"].get<std::string>();
+		}
+		state.known_processes.push_back(std::move(entry));
+	    }
+	}
     } catch (...) {
         // Corrupted or invalid state file: return default state.
     }
@@ -53,6 +70,14 @@ bool StateStore::save(const AgentState& state) const {
         json j;
         j["log_path"] = state.log_path;
         j["offset"] = state.offset;
+
+	j["known_processes"] = json::array();
+	for (const auto& proc : state.known_processes) {
+	    j["known_processes"].push_back({
+		{"pid", proc.pid},
+		{"process_name", proc.process_name}
+	    });
+	}
 
         std::ofstream out(state_file_path_, std::ios::trunc);
         if (!out.is_open()) {

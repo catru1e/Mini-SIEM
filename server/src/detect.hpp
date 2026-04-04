@@ -22,4 +22,6 @@ private:
   json detect_invalid_user_by_ip(const json& event);
   json detect_suspicious_sudo_by_user(const json& event);
   json detect_too_frequent_logins_by_user(const json& event);
+  json detect_blacklisted_process(const json& event);
+  json detect_sensitive_ssh_file_change(const json& event);
 };

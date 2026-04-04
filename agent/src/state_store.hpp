@@ -2,10 +2,17 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
+
+struct ProcessStateEntry {
+    int pid = 0;
+    std::string process_name;
+};
 
 struct AgentState {
     std::string log_path;
     std::uint64_t offset = 0;
+    std::vector<ProcessStateEntry> known_processes;
 };
 
 class StateStore {

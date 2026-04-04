@@ -34,5 +34,9 @@ add_executable(mini_siem_agent
   agent/src/log_reader.cpp
   agent/src/state_store.cpp
   agent/src/auth_parser.cpp
+  agent/src/process_snapshot.cpp
+  agent/src/process_snapshot.hpp
+  agent/src/file_monitor.cpp
+  agent/src/file_monitor.hpp
 )
 

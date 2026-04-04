@@ -89,6 +89,18 @@ std::vector<json> DetectionEngine::process_event(const json& event) {
     return alerts;
   }
 
+  if (event_type == "process_start") {
+    auto a = detect_blacklisted_process(event);
+    if (!a.is_null()) alerts.push_back(std::move(a));
+    return alerts;
+  }
+
+  if (event_type == "file_created" || event_type == "file_modified" || event_type == "file_deleted") {
+    auto a = detect_sensitive_ssh_file_change(event);
+    if (!a.is_null()) alerts.push_back(std::move(a));
+    return alerts;
+  }
+
   return alerts;
 }
 
@@ -265,4 +277,84 @@ json DetectionEngine::detect_too_frequent_logins_by_user(const json& event) {
   };
 
   //db_.insert_alert(now, rule_name, severity, title, desc.str(), alert.dump());
+}
+
+json DetectionEngine::detect_blacklisted_process(const json& event) {
+  const std::string process_name = safe_string(event, "process_name", "");
+  const std::string cmdline = safe_string(event, "cmdline", "");
+
+  if (process_name.empty()) return nullptr;
+
+  static const std::vector<std::string> blacklist = {
+    "nc",
+    "netcat",
+    "ncat",
+    "socat"
+  };
+
+  bool matched = false;
+  for (const auto& bad : blacklist) {
+    if (process_name == bad) {
+      matched = true;
+      break;
+    }
+  }
+
+  if (!matched) return nullptr;
+
+  const std::string now = now_iso_utc();
+  const std::string rule_name = "blacklisted_process_detected";
+  const std::string severity = "high";
+  const std::string title = "Blacklisted process started";
+
+  std::ostringstream desc;
+  desc << "Detected blacklisted process: " << process_name;
+  if (!cmdline.empty()) {
+    desc << " cmdline=\"" << cmdline << "\"";
+  }
+
+  return json {
+    {"ts", now},
+    {"rule_name", rule_name},
+    {"severity", severity},
+    {"title", title},
+    {"description", desc.str()},
+    {"process_name", process_name},
+    {"cmdline", cmdline},
+    {"pid", event.contains("pid") ? event["pid"] : json(nullptr)}
+  };
+}
+
+
+json DetectionEngine::detect_sensitive_ssh_file_change(const json& event) {
+  const std::string path = safe_string(event, "path", "");
+  const std::string event_type = safe_string(event, "event_type", "");
+  if (path.empty()) return nullptr;
+
+  bool sensitive = false;
+  if (path.find("authorized_keys") != std::string::npos) sensitive = true;
+  if (path.find("known_hosts") != std::string::npos) sensitive = true;
+  if (path.find("config") != std::string::npos) sensitive = true;
+  if (path.find("id_rsa") != std::string::npos) sensitive = true;
+  if (path.find("id_ed25519") != std::string::npos) sensitive = true;
+
+  if (!sensitive) return nullptr;
+
+  const std::string now = now_iso_utc();
+  const std::string rule_name = "sensitive_ssh_file_change";
+  const std::string severity = "high";
+  const std::string title = "Sensitive SSH file changed";
+
+  std::ostringstream desc;
+  desc << "Detected " << event_type << " on sensitive SSH file: " << path;
+
+  return json {
+    {"ts", now},
+    {"rule_name", rule_name},
+    {"severity", severity},
+    {"title", title},
+    {"description", desc.str()},
+    {"path", path},
+    {"event_type", event_type}
+  };
 }
