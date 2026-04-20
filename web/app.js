@@ -38,8 +38,22 @@ function severityClass(severity) {
 function shortEventDescription(item) {
   if (item.event?.description) return item.event.description;
   if (item.event?.message) return item.event.message;
+
+  if (item.event_type === "privilege_escalation") {
+    const user = item.event?.user || "unknown";
+    const command = item.event?.command || "unknown command";
+    return `sudo command by ${user}: ${command}`;
+  }
+
   if (item.event?.src_ip) return `Source IP: ${item.event.src_ip}`;
+  if (item.event?.raw) return item.event.raw;
+
   return "No additional description";
+}
+
+function eventCommand(item) {
+  if (item.event?.command) return item.event.command;
+  return "—";
 }
 
 function updateStats(events, alerts) {
@@ -84,6 +98,8 @@ function renderEvents(items) {
           ${createMetaItem("Source", item.source || "unknown")}
           ${createMetaItem("Severity", item.severity || "info")}
           ${createMetaItem("Event ID", item.id ?? "live")}
+	  ${createMetaItem("User", item.event?.user || "—")}
+  	  ${createMetaItem("Command", eventCommand(item))} 
         </div>
 
         <div>

@@ -352,6 +352,44 @@ long long SqliteDb::count_auth_success_by_user_since(const std::string& user, co
   return count;
 }
 
+bool SqliteDb::has_recent_alert_for_rule_and_user_since(
+    const std::string& rule_name,
+    const std::string& user,
+    const std::string& since_ts) {
+
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM alerts "
+    "WHERE rule_name = ? "
+    "AND ts >= ? "
+    "AND json_extract(json, '$.user') = ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, rule_name.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, user.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(has_recent_alert_for_rule_and_user_since)");
+  }
+
+  const long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count > 0;
+}
+
 void SqliteDb::insert_alert(const std::string& ts,
 			    const std::string& rule_name,
 			    const std::string& severity,
@@ -431,3 +469,69 @@ std::vector<DbAlertRow> SqliteDb::get_last_alerts(int limit) {
   return rows;
 }
 
+std::vector<std::string> SqliteDb::get_recent_privilege_escalation_commands_by_user_since(
+    const std::string& user,
+    const std::string& since_ts,
+    int limit) {
+
+  std::vector<std::string> commands;
+
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  if (rc != SQLITE_OK) {
+    return commands;
+  }
+
+  const char* sql =
+      "SELECT json FROM events "
+      "WHERE event_type = 'privilege_escalation' AND ts >= ? "
+      "ORDER BY ts DESC;";
+
+  sqlite3_stmt* stmt = nullptr;
+
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  if (rc != SQLITE_OK) {
+    sqlite3_close(db);
+    return commands;
+  }
+
+  sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    const unsigned char* json_text = sqlite3_column_text(stmt, 0);
+    if (!json_text) continue;
+
+    try {
+      auto j = nlohmann::json::parse(reinterpret_cast<const char*>(json_text));
+
+      if (!j.contains("user") || !j["user"].is_string()) continue;
+      if (j["user"].get<std::string>() != user) continue;
+
+      if (!j.contains("command") || !j["command"].is_string()) continue;
+
+      const std::string cmd = j["command"].get<std::string>();
+
+      // убрать дубликаты
+      bool exists = false;
+      for (const auto& existing : commands) {
+        if (existing == cmd) {
+          exists = true;
+          break;
+        }
+      }
+
+      if (!exists) {
+        commands.push_back(cmd);
+      }
+
+      if (static_cast<int>(commands.size()) >= limit) break;
+
+    } catch (...) {
+      continue;
+    }
+  }
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return commands;
+}

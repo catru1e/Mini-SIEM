@@ -102,11 +102,10 @@ struct SseClient {
 int main() {
   try {
     // Важно: относительный путь => работает с флешки
-    std::filesystem::create_directories("data");
-    std::filesystem::create_directories("logs");
-    std::filesystem::create_directories("web");
-
     const AppConfig config = ConfigLoader::load_from_file("config/config.json");
+
+    std::filesystem::create_directories(config.paths.data_dir);
+    std::filesystem::create_directories(config.paths.logs_dir);
 
     SqliteDb db(config.server.db_path);
     db.init();

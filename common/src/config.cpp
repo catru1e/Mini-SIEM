@@ -128,5 +128,11 @@ AppConfig ConfigLoader::load_from_file(const std::string& path) {
   if (cfg.dashboard.events_limit_max <= 0) cfg.dashboard.events_limit_max = 1000;
   if (cfg.dashboard.alerts_limit_max <= 0) cfg.dashboard.alerts_limit_max = 1000;
 
+  if (root.contains("paths") && root["paths"].is_object()) {
+    const auto& p = root["paths"];
+    cfg.paths.data_dir = read_string_or_default(p, "data_dir", cfg.paths.data_dir);
+    cfg.paths.logs_dir = read_string_or_default(p, "logs_dir", cfg.paths.logs_dir);
+  }
+
   return cfg;
 }

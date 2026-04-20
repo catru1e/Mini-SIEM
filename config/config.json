@@ -1,7 +1,7 @@
 {
   "server": {
     "host": "127.0.0.1",
-    "port": 3333,
+    "port": 6767,
     "db_path": "data/events.db"
   },
   "agent": {
@@ -34,5 +34,9 @@
     "alerts_limit_default": 100,
     "events_limit_max": 1000,
     "alerts_limit_max": 1000
+  },
+  "paths": {
+    "data_dir": "data",
+    "logs_dir": "logs"
   }
 }

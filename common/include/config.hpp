@@ -3,6 +3,11 @@
 #include <string>
 #include <vector>
 
+struct PathsConfig {
+  std::string data_dir = "data";
+  std::string logs_dir = "logs";
+};
+
 struct ServerConfig {
   std::string host = "127.0.0.1";
   int port = 8080;
@@ -50,6 +55,7 @@ struct AppConfig {
   AgentConfig agent;
   DetectionConfig detection;
   DashboardConfig dashboard;
+  PathsConfig paths;
 };
 
 class ConfigLoader{

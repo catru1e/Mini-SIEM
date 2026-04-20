@@ -74,6 +74,17 @@ int seconds_to_minutes_rounded_up(int seconds){
   return (seconds +59) / 60;
 }
 
+std::string join_commands(const std::vector<std::string>& commands) {
+  if (commands.empty()) return "";
+
+  std::ostringstream ss;
+  for (size_t i = 0; i < commands.size(); ++i) {
+    if (i > 0) ss << "; ";
+    ss << commands[i];
+  }
+  return ss.str();
+}
+constexpr int ALERT_SUPPRESSION_SECONDS = 60;
 } //NAMESPACE END
 
 
@@ -251,14 +262,29 @@ json DetectionEngine::detect_suspicious_sudo_by_user(const json& event) {
             << " since=" << since_ts << "\n";
   if (count < threshold) return nullptr;
 
-  const std::string now = now_iso_utc();
   const std::string rule_name = "suspicious_sudo_usage_by_user";
+  const std::string suppression_since_ts = seconds_ago_iso_utc(ALERT_SUPPRESSION_SECONDS);
+
+  if (db_.has_recent_alert_for_rule_and_user_since(rule_name, user, suppression_since_ts)) {
+    std::cerr << "[detect] sudo rule suppressed for user=" << user
+              << " within last " << ALERT_SUPPRESSION_SECONDS << " seconds\n";
+    return nullptr;
+  }
+
+  const auto recent_commands =
+      db_.get_recent_privilege_escalation_commands_by_user_since(user, since_ts, 5);
+
+  const std::string now = now_iso_utc();
   const std::string severity = "medium";
   const std::string title = "Suspiciously frequent sudo usage";
 
   std::ostringstream desc;
   desc << "Detected " << count << " privilege escalation events for user " << user
        << " within the last " << window_seconds << " seconds.";
+
+  if (!recent_commands.empty()) {
+    desc << " Recent commands: " << join_commands(recent_commands);
+  }
 
   return json {
     {"ts", now},
@@ -270,7 +296,8 @@ json DetectionEngine::detect_suspicious_sudo_by_user(const json& event) {
     {"count", count},
     {"threshold", threshold},
     {"window_seconds", window_seconds},
-    {"window_minutes", seconds_to_minutes_rounded_up(window_seconds)}
+    {"window_minutes", seconds_to_minutes_rounded_up(window_seconds)},
+    {"recent_commands", recent_commands}
   };
 }
 
