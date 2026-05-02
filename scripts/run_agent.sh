@@ -8,4 +8,7 @@ cd "$PROJECT_ROOT"
 
 mkdir -p logs data
 
-exec ./dist/mini_siem_agent >> logs/agent.log 2>&1
+echo "[run_agent] project root: $PROJECT_ROOT"
+echo "[run_agent] starting agent..."
+
+./dist/mini_siem_agent

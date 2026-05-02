@@ -8,4 +8,7 @@ cd "$PROJECT_ROOT"
 
 mkdir -p logs data
 
-exec ./dist/mini_siem_server >> logs/server.log 2>&1
+echo "[run_server] project root: $PROJECT_ROOT"
+echo "[run_server] starting server..."
+
+./dist/mini_siem_server
