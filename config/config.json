@@ -1,13 +1,15 @@
 {
   "server": {
     "host": "127.0.0.1",
-    "port": 6767,
+    "port": 6969,
     "db_path": "data/events.db"
   },
   "agent": {
     "log_paths": [
       "logs/demo_auth.log",
-      "/var/log/auth.log"
+      "/var/log/auth.log",
+      "/var/log/syslog",
+      "/var/log/kern.log"
     ],
     "state_path": "data/agent_state.json",
     "agent_log_path": "logs/agent.log",

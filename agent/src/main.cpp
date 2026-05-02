@@ -51,8 +51,6 @@ static std::string get_hostname_safe() {
   return "unknown-host";
 }
 
-
-//updated and better
 enum class AgentLogLevel {
   Info,
   Warn,
@@ -69,10 +67,11 @@ static const char* to_string(AgentLogLevel level) {
 }
 
 static void append_agent_log(const std::string& log_path,
-			     AgentLogLevel level,
-			     const std::string& message) {
+                             AgentLogLevel level,
+                             const std::string& message) {
   if (log_path.empty()) return;
   if (message.empty()) return;
+
   try {
     std::filesystem::path p(log_path);
 
@@ -88,46 +87,51 @@ static void append_agent_log(const std::string& log_path,
     }
 
     out << now_iso_utc()
-	<< " [" << to_string(level) << "] "
-	<< message << "\n";
+        << " [" << to_string(level) << "] "
+        << message << "\n";
   } catch (...) {
-    // chto bi agent ne upal
+    // Do not let logging crash the agent.
   }
 }
 
 static void log_agent_info(const std::string& log_path, const std::string& message) {
   append_agent_log(log_path, AgentLogLevel::Info, message);
 }
-static void log_agent_warn(const std::string& log_path, const std::string& message){
+
+static void log_agent_warn(const std::string& log_path, const std::string& message) {
   append_agent_log(log_path, AgentLogLevel::Warn, message);
 }
+
 static void log_agent_error(const std::string& log_path, const std::string& message) {
   append_agent_log(log_path, AgentLogLevel::Error, message);
-}
-
-static std::string choose_log_source(const std::vector<std::string>& log_paths) {
-  for (const auto& path : log_paths) {
-    if (std::filesystem::exists(path)) {
-      return path;
-    }
-  }
-  if (!log_paths.empty()) {
-    return log_paths.front();
-  }
-  return "logs/demo_auth.log";
 }
 
 static std::string source_name(const std::string& path) {
   return std::filesystem::path(path).filename().string();
 }
 
-//dlya inotify 
-static std::string choose_ssh_watch_path() {
-  const char* home = std::getenv("HOME");
-  if (!home || std::string(home).empty()){
-    return ".ssh";
+static bool is_auth_log_source(const std::string& path) {
+  return path.find("auth") != std::string::npos ||
+         path.find("demo_auth") != std::string::npos;
+}
+
+static bool can_open_file_for_reading(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  return in.is_open();
+}
+
+static std::uint64_t get_file_offset(const AgentState& state, const std::string& path) {
+  auto it = state.file_offsets.find(path);
+  if (it == state.file_offsets.end()) {
+    return 0;
   }
-  return std::string(home) + "/.ssh";
+  return it->second;
+}
+
+static void set_file_offset(AgentState& state,
+                            const std::string& path,
+                            std::uint64_t offset) {
+  state.file_offsets[path] = offset;
 }
 
 int main() {
@@ -140,209 +144,236 @@ int main() {
     HttpClient client(config.server.host, config.server.port);
 
     const std::string host = get_hostname_safe();
-    const std::string log_path = choose_log_source(config.agent.log_paths);
     const std::string ssh_watch_path = config.agent.ssh_watch_path;
     const std::string state_path = config.agent.state_path;
     const std::string agent_log_path = config.agent.agent_log_path;
 
-    LogReader reader(log_path);
     StateStore state_store(state_path);
     AuthParser auth_parser;
     ProcessSnapshot process_snapshot;
     FileMonitor file_monitor;
 
     AgentState state = state_store.load();
+
     std::unordered_set<int> known_pids;
     for (const auto& proc : state.known_processes) {
       known_pids.insert(proc.pid);
     }
 
-    if (state.log_path != log_path) {
-      state.log_path = log_path;
-      state.offset = 0;
-      state_store.save(state);
-    }
-
     bool process_baseline_initialized = !state.known_processes.empty();
-    bool log_missing_reported = false;
-    bool log_recovered_reported = false;
+
+    std::unordered_map<std::string, bool> missing_log_reported;
+    std::unordered_map<std::string, bool> unreadable_log_reported;
 
     bool file_monitor_ready = false;
     if (std::filesystem::exists(ssh_watch_path) && std::filesystem::is_directory(ssh_watch_path)) {
       file_monitor_ready = file_monitor.init(ssh_watch_path);
       if (file_monitor_ready) {
-  	log_agent_info(agent_log_path, "file monitor started, path=" + ssh_watch_path);
+        log_agent_info(agent_log_path, "file monitor started, path=" + ssh_watch_path);
       } else {
-  	log_agent_warn(agent_log_path, "file monitor failed to start, path=" + ssh_watch_path);
+        log_agent_warn(agent_log_path, "file monitor failed to start, path=" + ssh_watch_path);
       }
     } else {
       log_agent_warn(agent_log_path, "file monitor path not found: " + ssh_watch_path);
     }
 
-    std::cout << "[mini-siem-agent] started, reading log: " << log_path << "\n";
-    log_agent_info(agent_log_path, "agent started, source=" + log_path);
+    std::cout << "[mini-siem-agent] started\n";
+    std::cout << "[mini-siem-agent] log sources:\n";
+
+    log_agent_info(agent_log_path, "agent started");
+    log_agent_info(agent_log_path, "configured log sources:");
+
+    for (const auto& log_path : config.agent.log_paths) {
+      std::cout << "  - " << log_path << "\n";
+      log_agent_info(agent_log_path, "source=" + log_path);
+    }
 
     while (true) {
       // ------- process snapshot monitoring -------
       {
-	auto processes = process_snapshot.capture();
-	std::unordered_set<int> current_pids;
-	std::vector<ProcessStateEntry> new_state_processes;
+        auto processes = process_snapshot.capture();
+        std::unordered_set<int> current_pids;
+        std::vector<ProcessStateEntry> new_state_processes;
 
-	for (const auto& proc : processes) {
-	  if (proc.process_name == "(udev-worker)") {
-  	    continue;
-	  }
-	  current_pids.insert(proc.pid);
-	  new_state_processes.push_back({proc.pid, proc.process_name});
+        for (const auto& proc : processes) {
+          if (proc.process_name == "(udev-worker)") {
+            continue;
+          }
 
-	  if (known_pids.find(proc.pid) == known_pids.end()) {
-	    json event;
-	    event["ts"] = now_iso_utc();
-	    event["host"] = host;
-	    event["source"] = "proc";
-	    event["event_type"] = "process_start";
-	    event["severity"] = "info";
-	    event["pid"] = proc.pid;
-	    event["process_name"] = proc.process_name;
-	    event["cmdline"] = proc.cmdline;
-	    event["raw"] = "new process detected: " + proc.process_name +
-			   " pid=" + std::to_string(proc.pid);
+          current_pids.insert(proc.pid);
+          new_state_processes.push_back({proc.pid, proc.process_name});
 
-	    std::string response_text;
-	    bool ok = client.post_json("/ingest", event.dump(), response_text);
+          if (known_pids.find(proc.pid) == known_pids.end()) {
+            json event;
+            event["ts"] = now_iso_utc();
+            event["host"] = host;
+            event["source"] = "proc";
+            event["event_type"] = "process_start";
+            event["severity"] = "info";
+            event["pid"] = proc.pid;
+            event["process_name"] = proc.process_name;
+            event["cmdline"] = proc.cmdline;
+            event["raw"] = "new process detected: " + proc.process_name +
+                           " pid=" + std::to_string(proc.pid);
 
-	    if (ok) {
-	      std::string msg = "[OK] sent process_start pid=" +
-				std::to_string(proc.pid) +
-				" process_name=" + proc.process_name;
-	      std::cout << msg << "\n";
-	      log_agent_info(agent_log_path, msg);
-	    } else {
-	      std::string msg = "[ERR] failed to send process_start pid=" +
-				std::to_string(proc.pid) +
-				" response=" + response_text;
-	      std::cerr << msg << "\n";
-	      log_agent_error(agent_log_path, msg);
-	    }
-	  }
-	}
-	known_pids = std::move(current_pids);
-	state.known_processes = std::move(new_state_processes);
-	state_store.save(state);
+            std::string response_text;
+            bool ok = client.post_json("/ingest", event.dump(), response_text);
 
-	if (!process_baseline_initialized) {
-	  process_baseline_initialized = true;
-	  log_agent_info(agent_log_path, "process baseline initialized");
-	}
+            if (ok) {
+              std::string msg = "[OK] sent process_start pid=" +
+                                std::to_string(proc.pid) +
+                                " process_name=" + proc.process_name;
+              std::cout << msg << "\n";
+              log_agent_info(agent_log_path, msg);
+            } else {
+              std::string msg = "[ERR] failed to send process_start pid=" +
+                                std::to_string(proc.pid) +
+                                " response=" + response_text;
+              std::cerr << msg << "\n";
+              log_agent_error(agent_log_path, msg);
+            }
+          }
+        }
+
+        known_pids = std::move(current_pids);
+        state.known_processes = std::move(new_state_processes);
+        state_store.save(state);
+
+        if (!process_baseline_initialized) {
+          process_baseline_initialized = true;
+          log_agent_info(agent_log_path, "process baseline initialized");
+        }
       }
 
       // --------- file monitor (~/.ssh) ---------
       if (file_monitor_ready) {
-	auto file_events = file_monitor.poll_events();
+        auto file_events = file_monitor.poll_events();
 
-	for (const auto& fe : file_events) {
-	  json event;
-	  event["ts"] = now_iso_utc();
-	  event["host"] = host;
-	  event["source"] = "inotify:ssh";
-	  event["event_type"] = fe.event_type;
-	  event["severity"] = "medium";
-	  event["watched_path"] = fe.watched_path;
-	  event["path"] = fe.full_path;
-	  event["relative_path"] = fe.relative_path;
-	  event["mask"] = fe.mask;
-	  event["raw"] = fe.event_type + "; " + fe.full_path;
+        for (const auto& fe : file_events) {
+          json event;
+          event["ts"] = now_iso_utc();
+          event["host"] = host;
+          event["source"] = "inotify:ssh";
+          event["event_type"] = fe.event_type;
+          event["severity"] = "medium";
+          event["watched_path"] = fe.watched_path;
+          event["path"] = fe.full_path;
+          event["relative_path"] = fe.relative_path;
+          event["mask"] = fe.mask;
+          event["raw"] = fe.event_type + "; " + fe.full_path;
 
-	  std::string response_text;
-	  bool ok = client.post_json("/ingest", event.dump(), response_text);
+          std::string response_text;
+          bool ok = client.post_json("/ingest", event.dump(), response_text);
 
-	  if (ok) {
-	    std::string msg = "[OK] sent " + fe.event_type +
-			      " path=" + fe.full_path;
-	    std::cout << msg << "\n";
-	    log_agent_info(agent_log_path, msg);
-	  } else {
-	    std::string msg = "[ERR] failed to send " + fe.event_type +
-			      " response=" + response_text +
-			      " path=" + fe.full_path;
-	    std::cerr << msg << "\n";
-	    log_agent_error(agent_log_path, msg);
-	  }
-	}
-      }
-
-      // --------- auth.log monitoring --------
-      if (!reader.exists()) {
-	if (!log_missing_reported) {
-	  log_agent_warn(agent_log_path, "log file not found yet: " + log_path);
-	  log_missing_reported = true;
-	  log_recovered_reported = false;
-	}
-	std::this_thread::sleep_for(std::chrono::seconds(2));
-	continue;
-      }
-
-      if (log_missing_reported && !log_recovered_reported) {
-	log_agent_info(agent_log_path, "log file became available again: " + log_path);
-	log_recovered_reported = true;
-	log_missing_reported = false;
-      }
-
-      auto lines = reader.read_new_lines(state.offset, 100);
-
-      if (lines.empty()) {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        continue;
-      }
-
-      for (auto& item : lines) {
-	json event;
-	event["ts"] = now_iso_utc();
-	event["host"] = host;
-	event["source"] = source_name(log_path);
-
-	auto parsed = auth_parser.parse(item.text);
-
-	if (parsed.has_value()){
-	  event["event_type"] = parsed->event_type;
-	  event["severity"] = parsed->severity;
-
-	  for (auto it = parsed->fields.begin(); it != parsed->fields.end(); ++it) {
-	    event[it.key()] = it.value();
-	  }
-	} else {
-	  event["event_type"] = "raw_log_line";
-	  event["severity"] = "info";
-	  event["raw"] = item.text;
-	}
-
-        std::string response_text;
-        bool ok = client.post_json("/ingest", event.dump(), response_text);
-
-        if (ok) {
-          state.offset = item.next_offset;
-          state_store.save(state);
-
-	  std::string msg = "[OK] sent event_type=" +
-			    event["event_type"].get<std::string>() +
-			    " offset=" + std::to_string(state.offset) +
-			    " raw=" + item.text;
-
-          std::cout << msg << "\n";
-          log_agent_info(agent_log_path, msg);
-        }
-        else {
-	  std::string msg = "[ERR] failed to send event_type=" +
-			    event["event_type"].get<std::string>() +
-			    " response=" + response_text +
-			    " raw=" + item.text;
-
-          std::cerr << msg << "\n";
-          log_agent_error(agent_log_path, msg);
-          break;
+          if (ok) {
+            std::string msg = "[OK] sent " + fe.event_type +
+                              " path=" + fe.full_path;
+            std::cout << msg << "\n";
+            log_agent_info(agent_log_path, msg);
+          } else {
+            std::string msg = "[ERR] failed to send " + fe.event_type +
+                              " response=" + response_text +
+                              " path=" + fe.full_path;
+            std::cerr << msg << "\n";
+            log_agent_error(agent_log_path, msg);
+          }
         }
       }
+
+      // --------- multiple log source monitoring ---------
+      for (const auto& log_path : config.agent.log_paths) {
+        LogReader reader(log_path);
+
+        if (!reader.exists()) {
+          if (!missing_log_reported[log_path]) {
+            log_agent_warn(agent_log_path, "log file not found: " + log_path);
+            missing_log_reported[log_path] = true;
+          }
+          continue;
+        }
+
+        if (missing_log_reported[log_path]) {
+          log_agent_info(agent_log_path, "log file became available again: " + log_path);
+          missing_log_reported[log_path] = false;
+        }
+
+        if (!can_open_file_for_reading(log_path)) {
+          if (!unreadable_log_reported[log_path]) {
+            log_agent_warn(agent_log_path, "log file exists but cannot be opened for reading: " + log_path);
+            unreadable_log_reported[log_path] = true;
+          }
+          continue;
+        }
+
+        if (unreadable_log_reported[log_path]) {
+          log_agent_info(agent_log_path, "log file became readable again: " + log_path);
+          unreadable_log_reported[log_path] = false;
+        }
+
+        const std::uint64_t offset = get_file_offset(state, log_path);
+        auto lines = reader.read_new_lines(offset, 100);
+
+        for (auto& item : lines) {
+          json event;
+          event["ts"] = now_iso_utc();
+          event["host"] = host;
+          event["source"] = source_name(log_path);
+          event["log_path"] = log_path;
+          event["raw"] = item.text;
+
+          if (is_auth_log_source(log_path)) {
+            auto parsed = auth_parser.parse(item.text);
+
+            if (parsed.has_value()) {
+              event["event_type"] = parsed->event_type;
+              event["severity"] = parsed->severity;
+
+              for (auto it = parsed->fields.begin(); it != parsed->fields.end(); ++it) {
+                event[it.key()] = it.value();
+              }
+            } else {
+              event["event_type"] = "raw_log_line";
+              event["severity"] = "info";
+            }
+          } else {
+            event["event_type"] = "raw_log_line";
+            event["severity"] = "info";
+          }
+
+          std::string response_text;
+          bool ok = client.post_json("/ingest", event.dump(), response_text);
+
+          if (ok) {
+            set_file_offset(state, log_path, item.next_offset);
+            state_store.save(state);
+
+            std::string msg = "[OK] sent source=" +
+                              source_name(log_path) +
+                              " event_type=" +
+                              event["event_type"].get<std::string>() +
+                              " offset=" +
+                              std::to_string(item.next_offset) +
+                              " raw=" + item.text;
+
+            std::cout << msg << "\n";
+            log_agent_info(agent_log_path, msg);
+          } else {
+            std::string msg = "[ERR] failed to send source=" +
+                              source_name(log_path) +
+                              " event_type=" +
+                              event["event_type"].get<std::string>() +
+                              " response=" + response_text +
+                              " raw=" + item.text;
+
+            std::cerr << msg << "\n";
+            log_agent_error(agent_log_path, msg);
+            break;
+          }
+        }
+      }
+
+      state_store.save(state);
+      std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 
   } catch (const std::exception& e) {

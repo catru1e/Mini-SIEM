@@ -15,7 +15,12 @@ struct ServerConfig {
 };
 
 struct AgentConfig {
-  std::vector<std::string> log_paths = {"logs/demo_auth.log", "/var/log/auth.log"};
+  std::vector<std::string> log_paths = {
+    "logs/demo_auth.log",
+    "/var/log/auth.log",
+    "/var/log/syslog",
+    "/var/log/kern.log"
+  };
   std::string state_path = "data/agent_state.json";
   std::string agent_log_path = "logs/agent.log";
   std::string ssh_watch_path = "~/.ssh";

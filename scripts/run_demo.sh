@@ -6,7 +6,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-mkdir -p logs data
+mkdir -p logs data exports
+touch logs/demo_auth.log
 
 SERVER_LOG="logs/server.log"
 AGENT_LOG="logs/agent.log"
@@ -21,21 +22,78 @@ RED="\033[0;31m"
 BLUE="\033[0;34m"
 RESET="\033[0m"
 
+SUDO_KEEPALIVE_PID=""
+
 cleanup() {
+  set +e
+
   echo
   echo -e "${YELLOW}[demo] stopping Mini-SIEM...${RESET}"
 
   if [ -f "$AGENT_PID_FILE" ]; then
-    kill "$(cat "$AGENT_PID_FILE")" 2>/dev/null || true
+    AGENT_PID="$(cat "$AGENT_PID_FILE" 2>/dev/null || true)"
+
+    if [ -n "$AGENT_PID" ]; then
+      sudo -n kill "$AGENT_PID" 2>/dev/null || kill "$AGENT_PID" 2>/dev/null || true
+    fi
+
     rm -f "$AGENT_PID_FILE"
   fi
 
+  sudo -n pkill -f "${PROJECT_ROOT}/dist/mini_siem_agent" 2>/dev/null || true
+  sudo -n pkill -f "mini_siem_agent" 2>/dev/null || true
+
   if [ -f "$SERVER_PID_FILE" ]; then
-    kill "$(cat "$SERVER_PID_FILE")" 2>/dev/null || true
+    SERVER_PID="$(cat "$SERVER_PID_FILE" 2>/dev/null || true)"
+
+    if [ -n "$SERVER_PID" ]; then
+      kill "$SERVER_PID" 2>/dev/null || true
+    fi
+
     rm -f "$SERVER_PID_FILE"
   fi
 
+  pkill -f "${PROJECT_ROOT}/dist/mini_siem_server" 2>/dev/null || true
+  pkill -f "mini_siem_server" 2>/dev/null || true
+
+  if [ -n "$SUDO_KEEPALIVE_PID" ]; then
+    kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
+  fi
+
+  sudo -n chown -R "$(id -u):$(id -g)" logs data exports 2>/dev/null || true
+
   echo -e "${GREEN}[demo] stopped.${RESET}"
+}
+
+start_sudo_keepalive() {
+  (
+    while true; do
+      sudo -n true 2>/dev/null || exit 0
+      sleep 60
+    done
+  ) &
+
+  SUDO_KEEPALIVE_PID="$!"
+}
+
+require_sudo() {
+  echo
+  echo -e "${YELLOW}[demo] sudo is needed to read real Linux logs.${RESET}"
+  echo "[demo] The agent will read:"
+  echo "  logs/demo_auth.log"
+  echo "  /var/log/auth.log"
+  echo "  /var/log/syslog"
+  echo "  /var/log/kern.log"
+  echo
+  echo "[demo] Enter sudo password once."
+  echo
+
+  sudo -v || {
+    echo -e "${RED}[demo] sudo failed. Cannot start agent.${RESET}"
+    exit 1
+  }
+
+  start_sudo_keepalive
 }
 
 status_line() {
@@ -66,6 +124,12 @@ wait_for_server() {
   return 1
 }
 
+kill_old_processes() {
+  pkill -f "${PROJECT_ROOT}/dist/mini_siem_server" 2>/dev/null || true
+  sudo -n pkill -f "${PROJECT_ROOT}/dist/mini_siem_agent" 2>/dev/null || true
+  rm -f "$SERVER_PID_FILE" "$AGENT_PID_FILE"
+}
+
 start_server() {
   echo -e "${BLUE}[demo] starting server...${RESET}"
   : > "$SERVER_LOG"
@@ -74,9 +138,9 @@ start_server() {
 }
 
 start_agent() {
-  echo -e "${BLUE}[demo] starting agent...${RESET}"
+  echo -e "${BLUE}[demo] starting agent with sudo...${RESET}"
   : > "$AGENT_LOG"
-  ./dist/mini_siem_agent >> "$AGENT_LOG" 2>&1 &
+  sudo ./dist/mini_siem_agent >> "$AGENT_LOG" 2>&1 &
   echo $! > "$AGENT_PID_FILE"
 }
 
@@ -178,6 +242,7 @@ draw_screen() {
   echo
   echo "Project root: $PROJECT_ROOT"
   echo "Dashboard:    http://127.0.0.1:${PORT}"
+  echo "Mode:         demo + real Linux logs"
   echo
   status_line "Server" "$SERVER_PID_FILE"
   status_line "Agent " "$AGENT_PID_FILE"
@@ -203,6 +268,8 @@ draw_screen() {
 
 trap cleanup INT TERM EXIT
 
+require_sudo
+kill_old_processes
 start_server
 wait_for_server
 start_agent
@@ -233,8 +300,8 @@ while true; do
         echo "[demo] check file path: $payload_file"
       fi
 
-        echo
-        echo "Press Enter to continue..."
+      echo
+      echo "Press Enter to continue..."
       read -r
       ;;
     s)

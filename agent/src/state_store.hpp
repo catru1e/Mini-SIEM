@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct ProcessStateEntry {
@@ -10,8 +11,7 @@ struct ProcessStateEntry {
 };
 
 struct AgentState {
-    std::string log_path;
-    std::uint64_t offset = 0;
+    std::unordered_map<std::string, std::uint64_t> file_offsets;
     std::vector<ProcessStateEntry> known_processes;
 };
 
