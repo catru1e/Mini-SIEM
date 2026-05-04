@@ -44,6 +44,7 @@ add_executable(mini_siem_agent
   agent/src/process_snapshot.hpp
   agent/src/file_monitor.cpp
   agent/src/file_monitor.hpp
+  agent/src/syslog_parser.cpp
   ${COMMON_SOURCES}
 )
 

@@ -2,7 +2,7 @@
 
 Mini-SIEM USB is a simplified Security Information and Event Management system for Linux operating system security monitoring.
 
-The system collects Linux security events from demo log files and real system log files, normalizes them, stores them in SQLite, applies detection and correlation logic, and displays events and alerts in a web dashboard.
+The system collects Linux security events from demo log files, real Linux log files, process snapshots, and file activity monitoring. Events are normalized, sent to a local HTTP server, stored in SQLite, processed by detection and correlation logic, and displayed in a web dashboard.
 
 The project is designed to run as a portable directory from a USB drive.
 
@@ -11,12 +11,13 @@ The project is designed to run as a portable directory from a USB drive.
 ## Features
 
 - Portable USB execution
-- Unified demo launcher
-- Linux security log collection
+- Unified launcher through `scripts/run_demo.sh`
+- Demo log injection
+- Real Linux `/var/log` collection
 - Multiple log source support
-- Real `/var/log` collection
-- Demo auth log injection
+- Per-file offset tracking
 - Authentication log parsing
+- Universal syslog parsing
 - Failed login detection
 - Successful login detection
 - Sudo / privilege escalation detection
@@ -33,9 +34,9 @@ The project is designed to run as a portable directory from a USB drive.
 
 ## Supported Log Sources
 
-The agent can read multiple log sources configured in `config/config.json`.
+The agent reads multiple log sources configured in `config/config.json`.
 
-Current default sources:
+Default sources:
 
 ```text
 logs/demo_auth.log
@@ -46,7 +47,43 @@ logs/demo_auth.log
 
 `logs/demo_auth.log` is used for controlled demo payloads.
 
-Real Linux logs such as `/var/log/auth.log`, `/var/log/syslog`, and `/var/log/kern.log` usually require `sudo` permissions. Because of that, the demo launcher asks for the sudo password once and then starts the agent with the required permissions.
+Real Linux logs such as `/var/log/auth.log`, `/var/log/syslog`, and `/var/log/kern.log` usually require elevated permissions. Because of that, `scripts/run_demo.sh` asks for the sudo password once and starts the agent with the required permissions.
+
+---
+
+## Event Parsing
+
+The agent uses different parsers depending on the log source.
+
+```text
+auth logs       -> auth_parser
+other syslogs   -> syslog_parser
+```
+
+Authentication logs produce normalized security events such as:
+
+```text
+failed_login
+accepted_login
+invalid_user
+privilege_escalation
+session_open
+session_close
+```
+
+Generic system logs produce normalized system events:
+
+```json
+{
+  "source": "syslog",
+  "event_type": "system_event",
+  "program": "kernel",
+  "severity": "low",
+  "raw": "..."
+}
+```
+
+This allows the SIEM to understand more than only `auth.log`.
 
 ---
 
@@ -81,7 +118,7 @@ Web dashboard
 
 ```text
 mini-siem-usb/
-├── agent/          # event collection, log parsing, process/file monitoring
+├── agent/          # event collection, parsers, process/file monitoring
 ├── server/         # HTTP API, SQLite storage, detection, correlation
 ├── common/         # shared configuration loader
 ├── config/         # runtime configuration
@@ -90,9 +127,9 @@ mini-siem-usb/
 ├── exports/        # exported data, if needed
 ├── logs/           # runtime logs and demo payloads
 ├── scripts/        # build, run, demo and reset scripts
+├── third_party/    # external single-header dependencies
 ├── web/            # dashboard frontend
-├── README.md       # project overview
-└── RUN.md          # detailed USB run guide
+└── README.md       # project overview and run guide
 ```
 
 ---
@@ -106,14 +143,16 @@ From the project root:
 ./scripts/run_demo.sh
 ```
 
-The launcher starts both components:
+The launcher starts:
 
 ```text
 mini_siem_server
 mini_siem_agent
 ```
 
-The agent is started with `sudo` so it can read real Linux log files from `/var/log`.
+The server runs as the current user.
+
+The agent runs with `sudo` so it can read protected real Linux log files from `/var/log`.
 
 Then open the dashboard:
 
@@ -123,7 +162,7 @@ http://127.0.0.1:6767
 
 ---
 
-## Clean Demo Reset
+## Clean Reset
 
 To clean the database and runtime logs while preserving saved log offsets:
 
@@ -131,7 +170,13 @@ To clean the database and runtime logs while preserving saved log offsets:
 ./scripts/reset_demo.sh
 ```
 
-This keeps `data/agent_state.json`, so real Linux logs are not imported from the beginning again.
+This keeps:
+
+```text
+data/agent_state.json
+```
+
+Preserving this file is important because it stores offsets for every log source. Without it, the agent will reread real Linux logs from the beginning.
 
 To fully reset everything, including saved offsets:
 
@@ -276,26 +321,40 @@ Then go to the project directory:
 cd /mnt/mini-siem-usb/mini-siem-usb
 ```
 
-Detailed instructions are available in:
+If the project path changes after remounting, rebuild from a clean build directory:
 
-```text
-RUN.md
+```bash
+rm -rf build
+./scripts/build.sh
 ```
 
 ---
 
-## Detailed Run Guide
+## API Checks
 
-See [RUN.md](RUN.md) for:
+Health check:
 
-- USB mount instructions
-- build and run steps
-- launcher usage
-- real Linux log collection
-- demo payload examples
-- API checks
-- troubleshooting
-- final demonstration flow
+```bash
+curl http://127.0.0.1:6767/health
+```
+
+Expected output:
+
+```text
+OK
+```
+
+Recent events:
+
+```bash
+curl "http://127.0.0.1:6767/api/events?limit=20"
+```
+
+Recent alerts:
+
+```bash
+curl "http://127.0.0.1:6767/api/alerts?limit=20"
+```
 
 ---
 
@@ -311,6 +370,7 @@ It supports:
 - demo auth log monitoring
 - real Linux log monitoring
 - auth log parsing
+- universal syslog parsing
 - raw syslog and kernel log collection
 - process snapshot monitoring
 - file activity monitoring
@@ -359,20 +419,21 @@ cd /mnt/mini-siem-usb/mini-siem-usb
 Then:
 
 ```text
-1. Enter sudo password when requested
-2. Open http://127.0.0.1:6767
-3. Show that the server and agent are running
-4. Show that real Linux logs are collected
-5. Press d in the launcher
-6. Choose logs/bruteforce.txt
-7. Show failed login events in the dashboard
-8. Show generated alerts
-9. Press d again
-10. Choose logs/sudo_test.txt
-11. Show privilege escalation events
-12. Press s to open the full server log
-13. Press a to open the full agent log
-14. Press q to stop everything
+1. Enter sudo password when requested.
+2. Open http://127.0.0.1:6767.
+3. Show that the server and agent are running.
+4. Show that real Linux logs are collected.
+5. Press d in the launcher.
+6. Choose logs/bruteforce.txt.
+7. Show failed login events in the dashboard.
+8. Show generated alerts.
+9. Press d again.
+10. Choose logs/sudo_test.txt.
+11. Show privilege escalation events.
+12. Show system_event entries from syslog or kern.log.
+13. Press s to open the full server log.
+14. Press a to open the full agent log.
+15. Press q to stop everything.
 ```
 
 ---

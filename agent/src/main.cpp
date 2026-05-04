@@ -18,6 +18,7 @@
 #include "process_snapshot.hpp"
 #include "file_monitor.hpp"
 #include "config.hpp"
+#include "syslog_parser.hpp"
 
 using json = nlohmann::json;
 
@@ -154,6 +155,8 @@ int main() {
     FileMonitor file_monitor;
 
     AgentState state = state_store.load();
+
+    SyslogParser syslog_parser;
 
     std::unordered_set<int> known_pids;
     for (const auto& proc : state.known_processes) {
@@ -335,10 +338,13 @@ int main() {
               event["event_type"] = "raw_log_line";
               event["severity"] = "info";
             }
-          } else {
-            event["event_type"] = "raw_log_line";
-            event["severity"] = "info";
-          }
+	  } else {
+  	    auto parsed_syslog = syslog_parser.parse(item.text, source_name(log_path));
+
+  	    for (auto it = parsed_syslog.begin(); it != parsed_syslog.end(); ++it) {
+   	      event[it.key()] = it.value();
+ 	    }
+	  }
 
           std::string response_text;
           bool ok = client.post_json("/ingest", event.dump(), response_text);
