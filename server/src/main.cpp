@@ -745,6 +745,71 @@ int main() {
       }
     });
 
+    // Dashboard stats API
+    srv.Get("/api/stats", [&](const httplib::Request&, httplib::Response& res) {
+      try {
+        const auto events_by_type = db.count_events_by_event_type();
+        const auto events_by_source_type = db.count_events_by_source_type();
+        const auto alerts_by_severity = db.count_alerts_by_severity();
+        const auto events_over_time = db.count_events_over_time(60);
+
+        json events_by_type_json = json::object();
+        for (const auto& kv : events_by_type) {
+          events_by_type_json[kv.first] = kv.second;
+        }
+
+        json events_by_source_type_json = json::object();
+        for (const auto& kv : events_by_source_type) {
+          events_by_source_type_json[kv.first] = kv.second;
+        }
+
+        json alerts_by_severity_json = json::object();
+        for (const auto& kv : alerts_by_severity) {
+          alerts_by_severity_json[kv.first] = kv.second;
+        }
+
+        json events_over_time_json = json::array();
+        for (const auto& row : events_over_time) {
+          events_over_time_json.push_back({
+            {"bucket", row.bucket},
+            {"count", row.count}
+          });
+        }
+
+        long long high_alerts = 0;
+        long long critical_alerts = 0;
+
+        auto high_it = alerts_by_severity.find("high");
+        if (high_it != alerts_by_severity.end()) {
+          high_alerts = high_it->second;
+        }
+
+        auto critical_it = alerts_by_severity.find("critical");
+        if (critical_it != alerts_by_severity.end()) {
+          critical_alerts = critical_it->second;
+        }
+
+        json out = {
+          {"status", "ok"},
+          {"total_events", db.count_all_events()},
+          {"total_alerts", db.count_all_alerts()},
+          {"high_alerts", high_alerts},
+          {"critical_alerts", critical_alerts},
+          {"events_by_type", events_by_type_json},
+          {"events_by_source_type", events_by_source_type_json},
+          {"alerts_by_severity", alerts_by_severity_json},
+          {"events_over_time", events_over_time_json}
+        };
+
+        send_json_response(res, 200, out);
+      } catch (const std::exception& e) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
     // Get last events
     srv.Get("/api/events", [&](const httplib::Request& req, httplib::Response& res) {
       int limit = config.dashboard.events_limit_default;

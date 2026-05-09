@@ -9,6 +9,9 @@
 #include <stdexcept>
 #include <sstream>
 
+#include <algorithm>
+#include <map>
+
 using json = nlohmann::json;
 
 static void throw_sqlite(int rc, sqlite3* db, const char* where) {
@@ -720,4 +723,159 @@ bool SqliteDb::has_recent_alert_for_rule_and_group_since(const std::string& rule
   sqlite3_finalize(stmt);
   sqlite3_close(db);
   return count > 0;
+}
+
+
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 20. Dashboard shi !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+static long long scalar_count_query(const std::string& db_path, const char* sql) {
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  sqlite3_busy_timeout(db, 5000);
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(scalar_count_query)");
+  }
+
+  const long long value = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return value;
+}
+
+static std::map<std::string, long long> group_count_query(
+    const std::string& db_path,
+    const char* sql) {
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  sqlite3_busy_timeout(db, 5000);
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  std::map<std::string, long long> result;
+
+  while (true) {
+    rc = sqlite3_step(stmt);
+
+    if (rc == SQLITE_ROW) {
+      std::string key = sqlite_text(stmt, 0);
+      if (key.empty()) key = "unknown";
+
+      const long long count = sqlite3_column_int64(stmt, 1);
+      result[key] = count;
+      continue;
+    }
+
+    if (rc == SQLITE_DONE) break;
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(group_count_query)");
+  }
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return result;
+}
+
+long long SqliteDb::count_all_events() {
+  return scalar_count_query(db_path_, "SELECT COUNT(*) FROM events;");
+}
+
+long long SqliteDb::count_all_alerts() {
+  return scalar_count_query(db_path_, "SELECT COUNT(*) FROM alerts;");
+}
+
+std::map<std::string, long long> SqliteDb::count_events_by_event_type() {
+  return group_count_query(
+    db_path_,
+    "SELECT COALESCE(NULLIF(event_type, ''), 'unknown') AS k, COUNT(*) "
+    "FROM events "
+    "GROUP BY k "
+    "ORDER BY COUNT(*) DESC;"
+  );
+}
+
+std::map<std::string, long long> SqliteDb::count_events_by_source_type() {
+  return group_count_query(
+    db_path_,
+    "SELECT COALESCE(NULLIF(source_type, ''), 'unknown') AS k, COUNT(*) "
+    "FROM events "
+    "GROUP BY k "
+    "ORDER BY COUNT(*) DESC;"
+  );
+}
+
+std::map<std::string, long long> SqliteDb::count_alerts_by_severity() {
+  return group_count_query(
+    db_path_,
+    "SELECT COALESCE(NULLIF(severity, ''), 'unknown') AS k, COUNT(*) "
+    "FROM alerts "
+    "GROUP BY k "
+    "ORDER BY COUNT(*) DESC;"
+  );
+}
+
+std::vector<DbTimeBucket> SqliteDb::count_events_over_time(int limit) {
+  if (limit <= 0) limit = 60;
+  if (limit > 240) limit = 240;
+
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  sqlite3_busy_timeout(db, 5000);
+
+  const char* sql =
+    "SELECT substr(received_at, 1, 16) AS bucket, COUNT(*) "
+    "FROM events "
+    "WHERE received_at IS NOT NULL AND received_at != '' "
+    "GROUP BY bucket "
+    "ORDER BY bucket DESC "
+    "LIMIT ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_int(stmt, 1, limit);
+
+  std::vector<DbTimeBucket> rows;
+
+  while (true) {
+    rc = sqlite3_step(stmt);
+
+    if (rc == SQLITE_ROW) {
+      DbTimeBucket row;
+      row.bucket = sqlite_text(stmt, 0);
+      row.count = sqlite3_column_int64(stmt, 1);
+      rows.push_back(std::move(row));
+      continue;
+    }
+
+    if (rc == SQLITE_DONE) break;
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(count_events_over_time)");
+  }
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+
+  std::reverse(rows.begin(), rows.end());
+  return rows;
 }

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 struct DbEventRow {
   long long id = 0;
@@ -24,6 +25,11 @@ struct DbAlertRow {
   std::string title;
   std::string description;
   std::string json;
+};
+
+struct DbTimeBucket {
+  std::string bucket;
+  long long count = 0;
 };
 
 class SqliteDb {
@@ -65,6 +71,17 @@ public:
   long long count_auth_invalid_user_by_src_ip_since(const std::string& src_ip, const std::string& since_ts);
   long long count_privilege_escalation_by_user_since(const std::string& user, const std::string& since_ts);
   long long count_auth_success_by_user_since(const std::string& user, const std::string& since_ts);
+
+//20.
+  long long count_all_events();
+  long long count_all_alerts();
+
+  std::map<std::string, long long> count_events_by_event_type();
+  std::map<std::string, long long> count_events_by_source_type();
+  std::map<std::string, long long> count_alerts_by_severity();
+
+  std::vector<DbTimeBucket> count_events_over_time(int limit);
+//end 20.
 
   bool has_recent_alert_for_rule_and_user_since(
     const std::string& rule_name,

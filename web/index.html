@@ -3,260 +3,364 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mini SIEM Dashboard</title>
+  <title>Mini SIEM Red Console</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-logo">MS</div>
+        <div class="brand-mark">MS</div>
         <div>
           <h1>Mini SIEM</h1>
-          <p>Monitoring Dashboard</p>
+          <p>Threat Console</p>
         </div>
       </div>
 
-      <div class="sidebar-block">
-        <div class="sidebar-title">Status</div>
-        <div id="statusText" class="status-pill">Loading...</div>
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="nav-btn" data-tab="events">Events</button>
+        <button class="nav-btn" data-tab="alerts">Alerts</button>
+        <button class="nav-btn" data-tab="rules">Rules</button>
+      </nav>
+
+      <div class="side-card">
+        <div class="side-title">Runtime</div>
+        <div class="runtime-row">
+          <span class="pulse-dot"></span>
+          <span id="statusText">Manual mode</span>
+        </div>
+        <div id="runtimeNote" class="runtime-note">Auto-refresh is disabled.</div>
       </div>
 
-      <div class="sidebar-block">
-        <div class="sidebar-title">Controls</div>
-        <button id="refreshBtn" class="primary-btn">Refresh now</button>
-        <button id="reloadRulesBtn" class="secondary-btn">Reload rules</button>
+      <div class="side-card">
+        <div class="side-title">Controls</div>
+        <button id="refreshBtn" class="danger-main-btn">Refresh data</button>
+        <button id="autoRefreshBtn" class="ghost-btn">Auto-refresh: OFF</button>
+        <button id="themeToggleBtn" class="ghost-btn">Theme: Horror red</button>
+        <button id="clearOpenBtn" class="ghost-btn">Close all opened panels</button>
       </div>
 
-      <div class="sidebar-block">
-        <div class="sidebar-title">Rules</div>
-        <p class="sidebar-note">Create, edit, enable, disable and delete detection rules from the dashboard.</p>
+      <div class="side-card">
+        <div class="side-title">Query limit</div>
+        <input id="limitInput" type="number" min="10" max="1000" value="250" />
+      </div>
+
+      <div class="side-card">
+        <div class="side-title">Last update</div>
+        <div id="lastUpdateText" class="last-update">—</div>
       </div>
     </aside>
 
-    <main class="main-content">
+    <main class="main">
       <header class="topbar">
         <div>
-          <h2>Security Overview</h2>
-          <p class="topbar-subtitle">Live events, alerts and detection rules from your local SIEM instance</p>
+          <div class="eyebrow">portable linux security monitoring</div>
+          <h2 id="pageTitle">Threat Dashboard</h2>
+          <p id="pageSubtitle">Manual investigation console for events, alerts and detection rules.</p>
+        </div>
+
+        <div class="top-kpis">
+          <div class="top-pill">
+            <span>Total events</span>
+            <strong id="topTotalEvents">0</strong>
+          </div>
+          <div class="top-pill hot">
+            <span>High/Critical</span>
+            <strong id="topHotAlerts">0</strong>
+          </div>
         </div>
       </header>
 
-      <section class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Events</div>
-          <div id="statEvents" class="stat-value">0</div>
+      <section id="tabDashboard" class="tab-view active">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span>Total events</span>
+            <strong id="kpiEvents">0</strong>
+            <em>SQLite event storage</em>
+          </div>
+
+          <div class="kpi-card">
+            <span>Total alerts</span>
+            <strong id="kpiAlerts">0</strong>
+            <em>rules + correlation</em>
+          </div>
+
+          <div class="kpi-card hot">
+            <span>High/Critical alerts</span>
+            <strong id="kpiHotAlerts">0</strong>
+            <em>priority queue</em>
+          </div>
+
+          <div class="kpi-card">
+            <span>Active rules</span>
+            <strong id="kpiRules">0</strong>
+            <em>enabled rules</em>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Alerts</div>
-          <div id="statAlerts" class="stat-value">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">High Alerts</div>
-          <div id="statHighAlerts" class="stat-value danger">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Rules</div>
-          <div id="statRules" class="stat-value">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Last Update</div>
-          <div id="statLastUpdate" class="stat-value small">—</div>
+
+        <div class="dashboard-grid">
+          <section class="panel wide">
+            <div class="panel-head">
+              <div>
+                <h3>Events over time</h3>
+                <p>Grouped by received minute</p>
+              </div>
+            </div>
+            <div id="eventsTimeline" class="timeline-chart"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3>Alerts by severity</h3>
+                <p>Current database distribution</p>
+              </div>
+            </div>
+            <div id="severityBars" class="bars"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3>Events by source type</h3>
+                <p>auth / syslog / process / file</p>
+              </div>
+            </div>
+            <div id="sourceBars" class="bars"></div>
+          </section>
+
+          <section class="dashboard-split wide">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Recent events</h3>
+                  <p>Raw / Fields / Packet investigation</p>
+                </div>
+              </div>
+              <div id="dashboardEvents" class="card-list compact-dashboard-list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Recent alerts</h3>
+                  <p>Description / Source raw / Packet investigation</p>
+                </div>
+              </div>
+              <div id="dashboardAlerts" class="card-list compact-dashboard-list"></div>
+            </section>
+          </section>
         </div>
       </section>
 
-      <section class="filters-card">
-        <div class="filters-header">
-          <h3>Filters</h3>
-        </div>
-
-        <div class="filters-grid">
-          <div class="filter-group">
-            <label for="eventTypeFilter">Event type</label>
-            <select id="eventTypeFilter">
-              <option value="">All</option>
-            </select>
+      <section id="tabEvents" class="tab-view">
+        <section class="filter-panel">
+          <div class="kql-help">
+            <h3>Event query</h3>
+            <p>
+              Examples:
+              <code>event_type:auth_failed severity:high</code>
+              <code>host:smth source_type:syslog</code>
+              <code>raw:DENIED</code>
+              <code>user:root</code>
+              <code>ip:1.2.3.4</code>
+            </p>
           </div>
 
-          <div class="filter-group">
-            <label for="severityFilter">Severity</label>
-            <select id="severityFilter">
-              <option value="">All</option>
-            </select>
+          <div class="filter-grid kql-grid">
+            <div class="field search-field">
+              <label>KQL-like query</label>
+              <input id="eventSearchInput" type="search" placeholder="event_type:auth_failed severity:high raw:DENIED user:root" />
+            </div>
+            <button id="clearEventFiltersBtn" class="ghost-btn">Clear query</button>
           </div>
+        </section>
 
-          <div class="filter-group">
-            <label for="limitInput">Limit</label>
-            <input id="limitInput" type="number" min="1" max="500" value="100" />
-          </div>
-        </div>
-      </section>
-
-      <section class="content-grid">
-        <div class="panel">
-          <div class="panel-header">
+        <section class="panel">
+          <div class="panel-head">
             <div>
               <h3>Events</h3>
-              <p>Recent ingested activity</p>
+              <p>Click Raw, Fields or Packet to inspect the full event.</p>
             </div>
-            <span id="eventsCount" class="count-badge">0</span>
+            <span id="eventsCount" class="count-pill">0</span>
           </div>
-          <div id="eventsList" class="items-list"></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <div>
-              <h3>Alerts</h3>
-              <p>Detection and correlation results</p>
-            </div>
-            <span id="alertsCount" class="count-badge">0</span>
-          </div>
-          <div id="alertsList" class="items-list"></div>
-        </div>
+          <div id="eventsList" class="card-list"></div>
+        </section>
       </section>
 
-      <section class="panel rules-panel">
-        <div class="panel-header">
-          <div>
-            <h3>Detection Rules</h3>
-            <p>Manage JSON-based detection rules without editing files manually</p>
+      <section id="tabAlerts" class="tab-view">
+        <section class="filter-panel">
+          <div class="kql-help">
+            <h3>Alert query</h3>
+            <p>
+              Examples:
+              <code>severity:high</code>
+              <code>rule:RULE_KERNEL_ERROR</code>
+              <code>host:smth</code>
+              <code>raw:DENIED</code>
+              <code>group:kernel</code>
+            </p>
           </div>
-          <span id="rulesCount" class="count-badge">0</span>
-        </div>
 
-        <div id="ruleMessage" class="rule-message"></div>
-
-        <div class="rules-layout">
-          <div class="rule-form-card">
-            <h4 id="ruleFormTitle">Create rule</h4>
-
-            <div class="rule-grid">
-              <div class="filter-group">
-                <label for="ruleIdInput">Rule ID</label>
-                <input id="ruleIdInput" type="text" placeholder="RULE_FAILED_LOGIN_IP" />
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleEnabledInput">Enabled</label>
-                <label class="checkbox-row">
-                  <input id="ruleEnabledInput" type="checkbox" checked />
-                  <span>Rule is enabled</span>
-                </label>
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleTypeInput">Type</label>
-                <select id="ruleTypeInput">
-                  <option value="threshold">threshold</option>
-                  <option value="match">match</option>
-                </select>
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleSeverityInput">Severity</label>
-                <select id="ruleSeverityInput">
-                  <option value="info">info</option>
-                  <option value="low">low</option>
-                  <option value="medium" selected>medium</option>
-                  <option value="high">high</option>
-                </select>
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleEventTypesInput">Event types</label>
-                <input id="ruleEventTypesInput" type="text" placeholder="auth_failed, system_event" />
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleSourceTypesInput">Source types</label>
-                <input id="ruleSourceTypesInput" type="text" placeholder="auth, syslog, process, file" />
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleGroupByInput">Group by</label>
-                <input id="ruleGroupByInput" type="text" placeholder="src_ip, user, program, path" />
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleThresholdInput">Threshold</label>
-                <input id="ruleThresholdInput" type="number" min="1" value="5" />
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleWindowInput">Window seconds</label>
-                <input id="ruleWindowInput" type="number" min="1" value="300" />
-              </div>
-
-              <div class="filter-group">
-                <label for="ruleSuppressInput">Suppress seconds</label>
-                <input id="ruleSuppressInput" type="number" min="0" value="60" />
-              </div>
-
-              <div class="filter-group wide">
-                <label for="ruleTitleInput">Title</label>
-                <input id="ruleTitleInput" type="text" placeholder="Brute force from IP" />
-              </div>
-
-              <div class="filter-group wide">
-                <label for="ruleDescriptionInput">Description template</label>
-                <textarea id="ruleDescriptionInput" rows="3" placeholder="Detected {{count}} events from {{group_key}} within {{window_sec}} seconds."></textarea>
-              </div>
+          <div class="filter-grid kql-grid">
+            <div class="field search-field">
+              <label>KQL-like query</label>
+              <input id="alertSearchInput" type="search" placeholder="severity:medium rule:RULE_KERNEL_ERROR host:smth raw:error" />
             </div>
+            <button id="clearAlertFiltersBtn" class="ghost-btn">Clear query</button>
+          </div>
+        </section>
 
-            <div class="conditions-box">
-              <h4>Conditions</h4>
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Alerts</h3>
+              <p>Click Description, Source raw or Packet to inspect the full alert.</p>
+            </div>
+            <span id="alertsCount" class="count-pill">0</span>
+          </div>
+          <div id="alertsList" class="card-list"></div>
+        </section>
+      </section>
 
-              <div class="condition-grid">
-                <div class="filter-group">
-                  <label for="conditionFieldInput">Field</label>
-                  <input id="conditionFieldInput" type="text" placeholder="raw, program, severity" />
+      <section id="tabRules" class="tab-view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Detection Rules</h3>
+              <p>Rules loaded from config/rules.json</p>
+            </div>
+            <span id="rulesCount" class="count-pill">0</span>
+          </div>
+
+          <div id="ruleMessage" class="rule-message"></div>
+
+          <div class="rules-grid">
+            <div class="rule-editor">
+              <h4 id="ruleFormTitle">Create rule</h4>
+
+              <div class="rule-form-grid">
+                <div class="field">
+                  <label>Rule ID</label>
+                  <input id="ruleIdInput" type="text" placeholder="RULE_EXAMPLE" />
                 </div>
 
-                <div class="filter-group">
-                  <label for="conditionOpInput">Operator</label>
-                  <select id="conditionOpInput">
-                    <option value="equals">equals</option>
-                    <option value="not_equals">not_equals</option>
-                    <option value="contains">contains</option>
-                    <option value="contains_any">contains_any</option>
-                    <option value="in">in</option>
-                    <option value="starts_with">starts_with</option>
-                    <option value="ends_with">ends_with</option>
-                    <option value="exists">exists</option>
+                <label class="check-field">
+                  <input id="ruleEnabledInput" type="checkbox" checked />
+                  <span>Enabled</span>
+                </label>
+
+                <div class="field">
+                  <label>Type</label>
+                  <select id="ruleTypeInput">
+                    <option value="threshold">threshold</option>
+                    <option value="match">match</option>
                   </select>
                 </div>
 
-                <div class="filter-group">
-                  <label for="conditionValueInput">Value</label>
-                  <input id="conditionValueInput" type="text" placeholder="kernel or DENIED" />
+                <div class="field">
+                  <label>Severity</label>
+                  <select id="ruleSeverityInput">
+                    <option value="info">info</option>
+                    <option value="low">low</option>
+                    <option value="medium" selected>medium</option>
+                    <option value="high">high</option>
+                    <option value="critical">critical</option>
+                  </select>
                 </div>
 
-                <div class="filter-group">
-                  <label for="conditionValuesInput">Values</label>
-                  <input id="conditionValuesInput" type="text" placeholder="medium, high" />
+                <div class="field">
+                  <label>Event types</label>
+                  <input id="ruleEventTypesInput" type="text" placeholder="auth_failed, system_event" />
+                </div>
+
+                <div class="field">
+                  <label>Source types</label>
+                  <input id="ruleSourceTypesInput" type="text" placeholder="auth, syslog, process, file" />
+                </div>
+
+                <div class="field">
+                  <label>Group by</label>
+                  <input id="ruleGroupByInput" type="text" placeholder="src_ip, user, program" />
+                </div>
+
+                <div class="field">
+                  <label>Threshold</label>
+                  <input id="ruleThresholdInput" type="number" min="1" value="5" />
+                </div>
+
+                <div class="field">
+                  <label>Window seconds</label>
+                  <input id="ruleWindowInput" type="number" min="1" value="300" />
+                </div>
+
+                <div class="field">
+                  <label>Suppress seconds</label>
+                  <input id="ruleSuppressInput" type="number" min="0" value="60" />
+                </div>
+
+                <div class="field wide">
+                  <label>Title</label>
+                  <input id="ruleTitleInput" type="text" placeholder="Suspicious activity" />
+                </div>
+
+                <div class="field wide">
+                  <label>Description template</label>
+                  <textarea id="ruleDescriptionInput" rows="3" placeholder="Detected {{count}} events from {{group_key}}."></textarea>
                 </div>
               </div>
 
-              <button id="addConditionBtn" class="secondary-btn">Add condition</button>
-              <div id="conditionsList" class="conditions-list"></div>
+              <div class="conditions-box">
+                <h4>Conditions</h4>
+
+                <div class="condition-grid">
+                  <div class="field">
+                    <label>Field</label>
+                    <input id="conditionFieldInput" type="text" placeholder="raw, program, severity" />
+                  </div>
+
+                  <div class="field">
+                    <label>Operator</label>
+                    <select id="conditionOpInput">
+                      <option value="equals">equals</option>
+                      <option value="not_equals">not_equals</option>
+                      <option value="contains">contains</option>
+                      <option value="contains_any">contains_any</option>
+                      <option value="in">in</option>
+                      <option value="starts_with">starts_with</option>
+                      <option value="ends_with">ends_with</option>
+                      <option value="exists">exists</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label>Value</label>
+                    <input id="conditionValueInput" type="text" />
+                  </div>
+
+                  <div class="field">
+                    <label>Values</label>
+                    <input id="conditionValuesInput" type="text" placeholder="a, b, c" />
+                  </div>
+                </div>
+
+                <button id="addConditionBtn" class="ghost-btn small-btn">Add condition</button>
+                <div id="conditionsList" class="conditions-list"></div>
+              </div>
+
+              <div class="form-actions">
+                <button id="createRuleBtn" class="danger-main-btn">Create rule</button>
+                <button id="updateRuleBtn" class="danger-main-btn muted" disabled>Save changes</button>
+                <button id="clearRuleFormBtn" class="ghost-btn">Clear form</button>
+              </div>
             </div>
 
-            <div class="form-actions">
-              <button id="createRuleBtn" class="primary-btn">Create rule</button>
-              <button id="updateRuleBtn" class="primary-btn muted-btn" disabled>Save changes</button>
-              <button id="clearRuleFormBtn" class="secondary-btn">Clear form</button>
+            <div class="rules-list-wrap">
+              <div id="rulesList" class="rules-list"></div>
             </div>
           </div>
-
-          <div class="rules-list-card">
-            <div class="rules-list-header">
-              <h4>Rules from config/rules.json</h4>
-              <button id="loadRulesBtn" class="secondary-btn">Refresh rules</button>
-            </div>
-            <div id="rulesList" class="rules-list"></div>
-          </div>
-        </div>
+        </section>
       </section>
     </main>
   </div>
