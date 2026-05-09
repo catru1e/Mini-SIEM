@@ -231,6 +231,188 @@ static int find_rule_index_by_id(const json& rules, const std::string& id) {
   return -1;
 }
 
+static std::string make_dashboard_id(const std::string& title) {
+  std::string out = "DASHBOARD_";
+
+  for (char c : title) {
+    if (c >= 'a' && c <= 'z') {
+      out.push_back(static_cast<char>(c - 'a' + 'A'));
+    } else if (c >= 'A' && c <= 'Z') {
+      out.push_back(c);
+    } else if (c >= '0' && c <= '9') {
+      out.push_back(c);
+    } else if (c == '-' || c == '_' || c == ' ') {
+      if (!out.empty() && out.back() != '_') {
+        out.push_back('_');
+      }
+    }
+  }
+
+  while (!out.empty() && out.back() == '_') {
+    out.pop_back();
+  }
+
+  if (out == "DASHBOARD") {
+    out = "DASHBOARD_CUSTOM";
+  }
+
+  out += "_" + std::to_string(
+    std::chrono::duration_cast<std::chrono::seconds>(
+      std::chrono::system_clock::now().time_since_epoch()
+    ).count()
+  );
+
+  return out;
+}
+
+static json default_dashboards_root() {
+  return {
+    {"version", 1},
+    {"dashboards", json::array()}
+  };
+}
+
+static bool ensure_dashboards_file(const std::string& path, std::string& err) {
+  if (std::filesystem::exists(path)) {
+    return true;
+  }
+
+  return write_json_file(path, default_dashboards_root(), err);
+}
+
+static bool normalize_dashboards_root(json& root, std::string& err) {
+  if (root.is_array()) {
+    root = {
+      {"version", 1},
+      {"dashboards", root}
+    };
+    return true;
+  }
+
+  if (!root.is_object()) {
+    err = "dashboards file must contain JSON object";
+    return false;
+  }
+
+  if (!root.contains("version")) {
+    root["version"] = 1;
+  }
+
+  if (!root.contains("dashboards")) {
+    root["dashboards"] = json::array();
+  }
+
+  if (!root["dashboards"].is_array()) {
+    err = "dashboards field must be JSON array";
+    return false;
+  }
+
+  return true;
+}
+
+static bool validate_dashboard_json(const json& dashboard, std::string& err) {
+  if (!dashboard.is_object()) {
+    err = "dashboard must be a JSON object";
+    return false;
+  }
+
+  if (!dashboard.contains("id") || !dashboard["id"].is_string() || dashboard["id"].get<std::string>().empty()) {
+    err = "dashboard.id must be a non-empty string";
+    return false;
+  }
+
+  if (!dashboard.contains("title") || !dashboard["title"].is_string() || dashboard["title"].get<std::string>().empty()) {
+    err = "dashboard.title must be a non-empty string";
+    return false;
+  }
+
+  if (dashboard.contains("description") && !dashboard["description"].is_string()) {
+    err = "dashboard.description must be string";
+    return false;
+  }
+
+  if (dashboard.contains("locked") && !dashboard["locked"].is_boolean()) {
+    err = "dashboard.locked must be boolean";
+    return false;
+  }
+
+  if (dashboard.contains("layout") && !dashboard["layout"].is_object()) {
+    err = "dashboard.layout must be object";
+    return false;
+  }
+
+  if (!dashboard.contains("widgets")) {
+    err = "dashboard.widgets is required";
+    return false;
+  }
+
+  if (!dashboard["widgets"].is_array()) {
+    err = "dashboard.widgets must be array";
+    return false;
+  }
+
+  for (std::size_t i = 0; i < dashboard["widgets"].size(); ++i) {
+    const auto& widget = dashboard["widgets"][i];
+
+    if (!widget.is_object()) {
+      err = "dashboard.widgets[" + std::to_string(i) + "] must be object";
+      return false;
+    }
+
+    if (!widget.contains("id") || !widget["id"].is_string() || widget["id"].get<std::string>().empty()) {
+      err = "dashboard.widgets[" + std::to_string(i) + "].id must be non-empty string";
+      return false;
+    }
+
+    if (!widget.contains("type") || !widget["type"].is_string() || widget["type"].get<std::string>().empty()) {
+      err = "dashboard.widgets[" + std::to_string(i) + "].type must be non-empty string";
+      return false;
+    }
+
+    if (widget.contains("title") && !widget["title"].is_string()) {
+      err = "dashboard.widgets[" + std::to_string(i) + "].title must be string";
+      return false;
+    }
+
+    if (widget.contains("width") && !widget["width"].is_string()) {
+      err = "dashboard.widgets[" + std::to_string(i) + "].width must be string";
+      return false;
+    }
+
+    if (widget.contains("limit") && !widget["limit"].is_number_integer()) {
+      err = "dashboard.widgets[" + std::to_string(i) + "].limit must be integer";
+      return false;
+    }
+
+    if (widget.contains("filters") && !widget["filters"].is_object()) {
+      err = "dashboard.widgets[" + std::to_string(i) + "].filters must be object";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static int find_dashboard_index_by_id(const json& root, const std::string& id) {
+  if (!root.is_object()) return -1;
+  if (!root.contains("dashboards") || !root["dashboards"].is_array()) return -1;
+
+  const auto& dashboards = root["dashboards"];
+
+  for (std::size_t i = 0; i < dashboards.size(); ++i) {
+    const auto& item = dashboards[i];
+
+    if (!item.is_object()) continue;
+    if (!item.contains("id") || !item["id"].is_string()) continue;
+
+    if (item["id"].get<std::string>() == id) {
+      return static_cast<int>(i);
+    }
+  }
+
+  return -1;
+}
+
 static void send_json_response(httplib::Response& res, int status, const json& body) {
   res.status = status;
   res.set_content(body.dump(), "application/json");
@@ -270,7 +452,12 @@ static std::string sse_message(const std::string& event_name, const json& payloa
 
 static int clamp_limit(int requested, int def, int max_value) {
   if (requested <= 0) return def;
-  if (requested > max_value) return max_value;
+
+  // max_value <= 0 means unlimited
+  if (max_value > 0 && requested > max_value) {
+    return max_value;
+  }
+
   return requested;
 }
 
@@ -642,6 +829,330 @@ int main() {
           {"id", id},
           {"rules_reloaded", reloaded},
           {"rule", removed_rule}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    const std::string dashboards_path = "config/dashboards.json";
+    std::mutex dashboards_file_mutex;
+
+    // Dashboards API
+    srv.Get("/api/dashboards", [&](const httplib::Request&, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(dashboards_file_mutex);
+
+      json root;
+      std::string err;
+
+      if (!ensure_dashboards_file(dashboards_path, err)) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", err}
+        });
+        return;
+      }
+
+      if (!read_json_file(dashboards_path, root, err)) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", err}
+        });
+        return;
+      }
+
+      if (!normalize_dashboards_root(root, err)) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", err}
+        });
+        return;
+      }
+
+      send_json_response(res, 200, {
+        {"status", "ok"},
+        {"version", root.value("version", 1)},
+        {"count", root["dashboards"].size()},
+        {"dashboards", root["dashboards"]}
+      });
+    });
+
+    srv.Post("/api/dashboards", [&](const httplib::Request& req, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(dashboards_file_mutex);
+
+      try {
+        json dashboard = json::parse(req.body);
+
+        if (!dashboard.is_object()) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", "dashboard must be JSON object"}
+          });
+          return;
+        }
+
+        if (!dashboard.contains("id") || !dashboard["id"].is_string() || dashboard["id"].get<std::string>().empty()) {
+          dashboard["id"] = make_dashboard_id(safe_string(dashboard, "title", "Custom dashboard"));
+        }
+
+        const std::string now = now_iso_utc();
+
+        if (!dashboard.contains("created_at") || !dashboard["created_at"].is_string()) {
+          dashboard["created_at"] = now;
+        }
+
+        dashboard["updated_at"] = now;
+
+        if (!dashboard.contains("locked")) {
+          dashboard["locked"] = false;
+        }
+
+        if (!dashboard.contains("layout")) {
+          dashboard["layout"] = {
+            {"columns", 2}
+          };
+        }
+
+        std::string err;
+        if (!validate_dashboard_json(dashboard, err)) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!ensure_dashboards_file(dashboards_path, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        json root;
+        if (!read_json_file(dashboards_path, root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!normalize_dashboards_root(root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        const std::string id = dashboard["id"].get<std::string>();
+
+        if (find_dashboard_index_by_id(root, id) >= 0) {
+          send_json_response(res, 409, {
+            {"status", "error"},
+            {"message", "dashboard already exists"},
+            {"id", id}
+          });
+          return;
+        }
+
+        root["dashboards"].push_back(dashboard);
+
+        if (!write_json_file(dashboards_path, root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        send_json_response(res, 201, {
+          {"status", "ok"},
+          {"action", "created"},
+          {"id", id},
+          {"dashboard", dashboard}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Put(R"(/api/dashboards/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(dashboards_file_mutex);
+
+      try {
+        const std::string id = req.matches[1].str();
+
+        json updated_dashboard = json::parse(req.body);
+        updated_dashboard["id"] = id;
+        updated_dashboard["updated_at"] = now_iso_utc();
+
+        std::string err;
+
+        if (!ensure_dashboards_file(dashboards_path, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        json root;
+        if (!read_json_file(dashboards_path, root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!normalize_dashboards_root(root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        const int index = find_dashboard_index_by_id(root, id);
+
+        if (index < 0) {
+          send_json_response(res, 404, {
+            {"status", "error"},
+            {"message", "dashboard not found"},
+            {"id", id}
+          });
+          return;
+        }
+
+        json old_dashboard = root["dashboards"][static_cast<std::size_t>(index)];
+
+        if (old_dashboard.contains("created_at") && old_dashboard["created_at"].is_string()) {
+          updated_dashboard["created_at"] = old_dashboard["created_at"];
+        }
+
+        if (old_dashboard.contains("locked") && old_dashboard["locked"].is_boolean()) {
+          updated_dashboard["locked"] = old_dashboard["locked"];
+        } else if (!updated_dashboard.contains("locked")) {
+          updated_dashboard["locked"] = false;
+        }
+
+        if (!updated_dashboard.contains("layout")) {
+          updated_dashboard["layout"] = {
+            {"columns", 2}
+          };
+        }
+
+        if (!validate_dashboard_json(updated_dashboard, err)) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        root["dashboards"][static_cast<std::size_t>(index)] = updated_dashboard;
+
+        if (!write_json_file(dashboards_path, root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "updated"},
+          {"id", id},
+          {"dashboard", updated_dashboard}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Delete(R"(/api/dashboards/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(dashboards_file_mutex);
+
+      try {
+        const std::string id = req.matches[1].str();
+
+        json root;
+        std::string err;
+
+        if (!ensure_dashboards_file(dashboards_path, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!read_json_file(dashboards_path, root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!normalize_dashboards_root(root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        const int index = find_dashboard_index_by_id(root, id);
+
+        if (index < 0) {
+          send_json_response(res, 404, {
+            {"status", "error"},
+            {"message", "dashboard not found"},
+            {"id", id}
+          });
+          return;
+        }
+
+        json removed_dashboard = root["dashboards"][static_cast<std::size_t>(index)];
+
+        if (removed_dashboard.value("locked", false)) {
+          send_json_response(res, 409, {
+            {"status", "error"},
+            {"message", "locked dashboard cannot be deleted"},
+            {"id", id}
+          });
+          return;
+        }
+
+        root["dashboards"].erase(root["dashboards"].begin() + index);
+
+        if (!write_json_file(dashboards_path, root, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "deleted"},
+          {"id", id},
+          {"dashboard", removed_dashboard}
         });
       } catch (const std::exception& e) {
         send_json_response(res, 400, {

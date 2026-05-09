@@ -48,11 +48,11 @@ struct DetectionConfig {
 };
 
 struct DashboardConfig {
-  int events_limit_default = 100;
-  int alerts_limit_default = 100;
+  int events_limit_default = 10000;
+  int alerts_limit_default = 10000;
 
-  int events_limit_max = 1000;
-  int alerts_limit_max = 1000;
+  int events_limit_max = 0;
+  int alerts_limit_max = 0;
 };
 
 struct AppConfig {

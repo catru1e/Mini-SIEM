@@ -34,8 +34,8 @@
   "dashboard": {
     "events_limit_default": 100,
     "alerts_limit_default": 100,
-    "events_limit_max": 1000,
-    "alerts_limit_max": 1000
+    "events_limit_max": 0,
+    "alerts_limit_max": 0
   },
   "paths": {
     "data_dir": "data",

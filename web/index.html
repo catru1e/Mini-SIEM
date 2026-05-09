@@ -43,7 +43,7 @@
 
       <div class="side-card">
         <div class="side-title">Query limit</div>
-        <input id="limitInput" type="number" min="10" max="1000" value="250" />
+        <input id="limitInput" type="number" min="1" value="250" />
       </div>
 
       <div class="side-card">
@@ -72,87 +72,500 @@
         </div>
       </header>
 
-      <section id="tabDashboard" class="tab-view active">
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <span>Total events</span>
-            <strong id="kpiEvents">0</strong>
-            <em>SQLite event storage</em>
-          </div>
+<section id="tabDashboard" class="tab-view active">
+  <section class="dashboard-control-panel">
+    <div>
+      <h3>Custom dashboards</h3>
+      <p>Switch between SOC-style dashboards: Overview, Auth and File Activity.</p>
+    </div>
 
-          <div class="kpi-card">
-            <span>Total alerts</span>
-            <strong id="kpiAlerts">0</strong>
-            <em>rules + correlation</em>
-          </div>
+<div class="dashboard-mode-tabs">
+  <button class="dashboard-mode-btn active" data-dashboard-mode="overview">Overview</button>
+  <button class="dashboard-mode-btn" data-dashboard-mode="auth">Auth</button>
+  <button class="dashboard-mode-btn" data-dashboard-mode="file">File activity</button>
+  <button class="dashboard-mode-btn" data-dashboard-mode="custom">Custom</button>
+</div>
+  </section>
 
-          <div class="kpi-card hot">
-            <span>High/Critical alerts</span>
-            <strong id="kpiHotAlerts">0</strong>
-            <em>priority queue</em>
-          </div>
+  <div id="dashboardOverview" class="dashboard-mode-view active">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span>Total events</span>
+        <strong id="kpiEvents">0</strong>
+        <em>SQLite event storage</em>
+      </div>
 
-          <div class="kpi-card">
-            <span>Active rules</span>
-            <strong id="kpiRules">0</strong>
-            <em>enabled rules</em>
+      <div class="kpi-card">
+        <span>Total alerts</span>
+        <strong id="kpiAlerts">0</strong>
+        <em>rules + correlation</em>
+      </div>
+
+      <div class="kpi-card hot">
+        <span>High/Critical alerts</span>
+        <strong id="kpiHotAlerts">0</strong>
+        <em>priority queue</em>
+      </div>
+
+      <div class="kpi-card">
+        <span>Active rules</span>
+        <strong id="kpiRules">0</strong>
+        <em>enabled rules</em>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <section class="panel wide">
+        <div class="panel-head">
+          <div>
+            <h3>Events over time</h3>
+            <p>Grouped by received minute</p>
           </div>
         </div>
-
-        <div class="dashboard-grid">
-          <section class="panel wide">
-            <div class="panel-head">
-              <div>
-                <h3>Events over time</h3>
-                <p>Grouped by received minute</p>
-              </div>
-            </div>
-            <div id="eventsTimeline" class="timeline-chart"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h3>Alerts by severity</h3>
-                <p>Current database distribution</p>
-              </div>
-            </div>
-            <div id="severityBars" class="bars"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h3>Events by source type</h3>
-                <p>auth / syslog / process / file</p>
-              </div>
-            </div>
-            <div id="sourceBars" class="bars"></div>
-          </section>
-
-          <section class="dashboard-split wide">
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <h3>Recent events</h3>
-                  <p>Raw / Fields / Packet investigation</p>
-                </div>
-              </div>
-              <div id="dashboardEvents" class="card-list compact-dashboard-list"></div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <h3>Recent alerts</h3>
-                  <p>Description / Source raw / Packet investigation</p>
-                </div>
-              </div>
-              <div id="dashboardAlerts" class="card-list compact-dashboard-list"></div>
-            </section>
-          </section>
-        </div>
+        <div id="eventsTimeline" class="timeline-chart"></div>
       </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Alerts by severity</h3>
+            <p>Current database distribution</p>
+          </div>
+        </div>
+        <div id="severityBars" class="bars"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Events by source type</h3>
+            <p>auth / syslog / process / file</p>
+          </div>
+        </div>
+        <div id="sourceBars" class="bars"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Top source IPs</h3>
+            <p>Most active IPs in loaded events</p>
+          </div>
+        </div>
+        <div id="topIpsWidget" class="rank-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Top users</h3>
+            <p>Most active users in loaded events</p>
+          </div>
+        </div>
+        <div id="topUsersWidget" class="rank-list"></div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <div>
+            <h3>Alerts trend</h3>
+            <p>Recent alerts grouped by time bucket</p>
+          </div>
+        </div>
+        <div id="alertsTrendWidget" class="timeline-chart compact"></div>
+      </section>
+
+      <section class="dashboard-split wide">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Recent events</h3>
+              <p>Raw / Fields / Packet investigation</p>
+            </div>
+          </div>
+          <div id="dashboardEvents" class="card-list compact-dashboard-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Recent alerts</h3>
+              <p>Description / Source raw / Packet investigation</p>
+            </div>
+          </div>
+          <div id="dashboardAlerts" class="card-list compact-dashboard-list"></div>
+        </section>
+      </section>
+    </div>
+  </div>
+
+  <div id="dashboardAuth" class="dashboard-mode-view">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span>Auth events</span>
+        <strong id="authTotalEvents">0</strong>
+        <em>source_type = auth</em>
+      </div>
+
+      <div class="kpi-card hot">
+        <span>Failed logins</span>
+        <strong id="authFailedEvents">0</strong>
+        <em>auth_failed events</em>
+      </div>
+
+      <div class="kpi-card">
+        <span>Successful logins</span>
+        <strong id="authSuccessEvents">0</strong>
+        <em>auth_success events</em>
+      </div>
+
+      <div class="kpi-card">
+        <span>Invalid users</span>
+        <strong id="authInvalidEvents">0</strong>
+        <em>auth_invalid_user events</em>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Top attacking IPs</h3>
+            <p>Grouped by src_ip from auth events</p>
+          </div>
+        </div>
+        <div id="authTopIpsWidget" class="rank-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Top targeted users</h3>
+            <p>Grouped by user from auth events</p>
+          </div>
+        </div>
+        <div id="authTopUsersWidget" class="rank-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Auth event types</h3>
+            <p>Distribution of authentication activity</p>
+          </div>
+        </div>
+        <div id="authTypesWidget" class="bars"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Auth alerts</h3>
+            <p>Alerts related to authentication</p>
+          </div>
+        </div>
+        <div id="authAlertsWidget" class="rank-list"></div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <div>
+            <h3>Recent auth events</h3>
+            <p>Latest authentication events from loaded dataset</p>
+          </div>
+        </div>
+        <div id="authRecentEvents" class="card-list compact-dashboard-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="dashboardFile" class="dashboard-mode-view">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span>File events</span>
+        <strong id="fileTotalEvents">0</strong>
+        <em>source_type = file</em>
+      </div>
+
+      <div class="kpi-card">
+        <span>Created</span>
+        <strong id="fileCreatedEvents">0</strong>
+        <em>file_created</em>
+      </div>
+
+      <div class="kpi-card hot">
+        <span>Modified</span>
+        <strong id="fileModifiedEvents">0</strong>
+        <em>file_modified</em>
+      </div>
+
+      <div class="kpi-card">
+        <span>Deleted</span>
+        <strong id="fileDeletedEvents">0</strong>
+        <em>file_deleted</em>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Top file paths</h3>
+            <p>Most active watched paths</p>
+          </div>
+        </div>
+        <div id="fileTopPathsWidget" class="rank-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>File actions</h3>
+            <p>Created / modified / deleted</p>
+          </div>
+        </div>
+        <div id="fileActionsWidget" class="bars"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>File severity</h3>
+            <p>Severity distribution for file events</p>
+          </div>
+        </div>
+        <div id="fileSeverityWidget" class="bars"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>File alerts</h3>
+            <p>Alerts related to file activity</p>
+          </div>
+        </div>
+        <div id="fileAlertsWidget" class="rank-list"></div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <div>
+            <h3>Recent file events</h3>
+            <p>Latest file activity from loaded dataset</p>
+          </div>
+        </div>
+        <div id="fileRecentEvents" class="card-list compact-dashboard-list"></div>
+      </section>
+    </div>
+  </div>
+
+<div id="dashboardCustom" class="dashboard-mode-view">
+  <section class="custom-dashboard-shell">
+    <div class="custom-dashboard-top">
+      <div>
+        <h3>Custom dashboard builder</h3>
+        <p>Create enterprise-style dashboards, add widgets, configure filters and save layout to config/dashboards.json.</p>
+      </div>
+
+      <div class="custom-dashboard-actions">
+        <button id="newDashboardBtn" class="ghost-btn">New dashboard</button>
+        <button id="duplicateDashboardBtn" class="ghost-btn">Duplicate</button>
+        <button id="saveDashboardBtn" class="danger-main-btn">Save dashboard</button>
+        <button id="deleteDashboardBtn" class="ghost-btn danger-soft">Delete</button>
+      </div>
+    </div>
+
+    <div id="customDashboardMessage" class="custom-dashboard-message"></div>
+<section class="dashboard-library-panel">
+  <div class="dashboard-library-head">
+    <div>
+      <h4>Dashboard library</h4>
+      <p>Saved custom dashboards from config/dashboards.json</p>
+    </div>
+
+    <span id="dashboardLibraryCount" class="count-pill">0</span>
+  </div>
+
+  <div id="dashboardLibraryList" class="dashboard-library-list"></div>
+</section>
+    <div class="custom-dashboard-grid">
+      <aside class="custom-dashboard-editor">
+        <section class="custom-editor-card">
+          <div class="custom-editor-head">
+            <div>
+              <h4>Dashboard</h4>
+              <p>Select existing dashboard or edit metadata.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Saved dashboards</label>
+            <select id="customDashboardSelect"></select>
+          </div>
+
+          <div class="field">
+            <label>Dashboard title</label>
+            <input id="customDashboardTitleInput" type="text" placeholder="SOC Investigation Dashboard" />
+          </div>
+
+          <div class="field">
+            <label>Description</label>
+            <textarea id="customDashboardDescriptionInput" rows="3" placeholder="Describe the purpose of this dashboard"></textarea>
+          </div>
+
+          <div class="field">
+            <label>Layout columns</label>
+            <select id="customDashboardColumnsInput">
+              <option value="1">1 column</option>
+              <option value="2" selected>2 columns</option>
+              <option value="3">3 columns</option>
+            </select>
+          </div>
+        </section>
+
+        <section class="custom-editor-card">
+          <div class="custom-editor-head">
+            <div>
+              <h4>Widget builder</h4>
+              <p>Add KPI, ranking, trend and investigation widgets.</p>
+            </div>
+            <span id="widgetEditorModePill" class="editor-mode-pill">add mode</span>
+          </div>
+
+          <div class="field">
+            <label>Widget type</label>
+            <select id="widgetTypeInput">
+              <option value="kpi_events">KPI: events count</option>
+              <option value="kpi_alerts">KPI: alerts count</option>
+              <option value="kpi_high_alerts">KPI: high / critical alerts</option>
+              <option value="top_ips">Top source IPs</option>
+              <option value="top_users">Top users</option>
+              <option value="top_file_paths">Top file paths</option>
+              <option value="alerts_trend">Alerts trend</option>
+              <option value="event_type_distribution">Event type distribution</option>
+              <option value="severity_distribution">Severity distribution</option>
+              <option value="source_type_distribution">Source type distribution</option>
+              <option value="recent_events">Recent events</option>
+              <option value="recent_alerts">Recent alerts</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Widget title</label>
+            <input id="widgetTitleInput" type="text" placeholder="Top attacking IPs" />
+          </div>
+
+          <div class="custom-widget-row">
+            <div class="field">
+              <label>Width</label>
+              <select id="widgetWidthInput">
+                <option value="full">full</option>
+                <option value="half" selected>half</option>
+                <option value="third">third</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Limit</label>
+              <input id="widgetLimitInput" type="number" min="1" value="8" />
+            </div>
+          </div>
+
+          <div class="custom-filter-box">
+            <h5>Widget filters</h5>
+
+            <div class="custom-widget-row">
+              <div class="field">
+                <label>Source type</label>
+                <select id="widgetFilterSourceTypeInput">
+                  <option value="">any</option>
+                  <option value="auth">auth</option>
+                  <option value="syslog">syslog</option>
+                  <option value="process">process</option>
+                  <option value="file">file</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label>Severity</label>
+                <select id="widgetFilterSeverityInput">
+                  <option value="">any</option>
+                  <option value="info">info</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="critical">critical</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Event type</label>
+              <input id="widgetFilterEventTypeInput" type="text" placeholder="auth_failed, system_event, file_modified" />
+            </div>
+
+            <div class="custom-widget-row">
+              <div class="field">
+                <label>Custom field</label>
+                <input id="widgetFilterFieldInput" type="text" placeholder="program, user, raw, path" />
+              </div>
+
+              <div class="field">
+                <label>Contains value</label>
+                <input id="widgetFilterValueInput" type="text" placeholder="root, DENIED, ssh" />
+              </div>
+            </div>
+          </div>
+
+          <div class="custom-widget-actions">
+            <button id="addWidgetBtn" class="danger-main-btn">Add widget</button>
+            <button id="updateWidgetBtn" class="danger-main-btn muted" disabled>Update widget</button>
+            <button id="clearWidgetFormBtn" class="ghost-btn">Clear widget</button>
+          </div>
+        </section>
+
+        <section class="custom-editor-card">
+          <div class="custom-editor-head">
+            <div>
+              <h4>Widgets</h4>
+              <p>Edit, move or remove widgets from current dashboard.</p>
+            </div>
+          </div>
+
+          <div id="customWidgetsList" class="custom-widgets-list"></div>
+        </section>
+      </aside>
+
+      <main class="custom-dashboard-preview">
+        <section class="custom-preview-head">
+          <div>
+            <h3 id="customPreviewTitle">Custom dashboard</h3>
+            <p id="customPreviewDescription">Select or create a dashboard.</p>
+          </div>
+
+          <div class="custom-preview-meta">
+            <span id="customPreviewId">—</span>
+            <span id="customPreviewWidgetCount">0 widgets</span>
+          </div>
+        </section>
+
+        <section id="customDashboardRender" class="custom-dashboard-render columns-2"></section>
+
+        <section class="custom-json-card">
+          <div class="custom-editor-head">
+            <div>
+              <h4>Dashboard JSON</h4>
+              <p>This layout is stored by the backend in config/dashboards.json.</p>
+            </div>
+          </div>
+
+          <pre id="customDashboardJsonPreview" class="rule-json-preview">{}</pre>
+        </section>
+      </main>
+    </div>
+  </section>
+</div>
+</section>
 
       <section id="tabEvents" class="tab-view">
         <section class="filter-panel">
@@ -228,17 +641,64 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-              <h3>Detection Rules</h3>
-              <p>Rules loaded from config/rules.json</p>
+              <h3>Visual Detection Rule Editor</h3>
+              <p>Create, edit, validate and save rules into config/rules.json</p>
             </div>
             <span id="rulesCount" class="count-pill">0</span>
           </div>
 
           <div id="ruleMessage" class="rule-message"></div>
 
-          <div class="rules-grid">
+          <section class="rule-templates">
+            <div class="rule-templates-head">
+              <div>
+                <h4>Quick rule templates</h4>
+                <p>Load a ready SIEM rule pattern, then adjust fields before saving.</p>
+              </div>
+            </div>
+
+            <div class="template-grid">
+              <button class="template-card" data-rule-template="failed_login_ip">
+                <span>Auth brute force</span>
+                <strong>Failed login by IP</strong>
+                <em>auth_failed grouped by src_ip</em>
+              </button>
+
+              <button class="template-card" data-rule-template="failed_login_user">
+                <span>User attack</span>
+                <strong>Failed login by user</strong>
+                <em>auth_failed grouped by user</em>
+              </button>
+
+              <button class="template-card" data-rule-template="syslog_contains">
+                <span>Syslog match</span>
+                <strong>Raw text contains</strong>
+                <em>system_event + raw condition</em>
+              </button>
+
+              <button class="template-card" data-rule-template="blacklisted_process">
+                <span>Process watch</span>
+                <strong>Blacklisted process</strong>
+                <em>process_start + process_name list</em>
+              </button>
+
+              <button class="template-card" data-rule-template="sensitive_file">
+                <span>File integrity</span>
+                <strong>Sensitive file change</strong>
+                <em>file_created / modified / deleted</em>
+              </button>
+            </div>
+          </section>
+
+          <div class="rules-grid stage21-grid">
             <div class="rule-editor">
-              <h4 id="ruleFormTitle">Create rule</h4>
+              <div class="rule-editor-title-row">
+                <div>
+                  <h4 id="ruleFormTitle">Create rule</h4>
+                  <p>Use the form as a visual builder. The JSON preview updates live.</p>
+                </div>
+                <span id="editorModePill" class="editor-mode-pill">create mode</span>
+              </div>
 
               <div class="rule-form-grid">
                 <div class="field">
@@ -312,7 +772,12 @@
               </div>
 
               <div class="conditions-box">
-                <h4>Conditions</h4>
+                <div class="conditions-head">
+                  <div>
+                    <h4>Conditions</h4>
+                    <p>Optional field matching before a rule can trigger.</p>
+                  </div>
+                </div>
 
                 <div class="condition-grid">
                   <div class="field">
@@ -356,7 +821,52 @@
               </div>
             </div>
 
+            <aside class="rule-preview-panel">
+              <div class="rule-preview-sticky">
+                <div class="rule-preview-head">
+                  <div>
+                    <h4>Live rule JSON</h4>
+                    <p>This is exactly what will be sent to the Rules API.</p>
+                  </div>
+                </div>
+
+                <div id="ruleValidationBox" class="validation-box info">
+                  Fill the form or load a template.
+                </div>
+
+                <pre id="ruleJsonPreview" class="rule-json-preview">{}</pre>
+
+                <div class="preview-actions">
+                  <button id="validateRuleBtn" class="ghost-btn">Validate rule</button>
+                  <button id="copyRuleJsonBtn" class="ghost-btn">Copy JSON</button>
+                </div>
+
+                <div class="rule-help-box">
+                  <h5>Template variables</h5>
+                  <p>
+                    You can use:
+                    <code>{{count}}</code>
+                    <code>{{group_key}}</code>
+                    <code>{{threshold}}</code>
+                    <code>{{window_sec}}</code>
+                    <code>{{event_type}}</code>
+                    <code>{{source}}</code>
+                    <code>{{source_type}}</code>
+                    <code>{{host}}</code>
+                    <code>{{rule_id}}</code>
+                  </p>
+                </div>
+              </div>
+            </aside>
+
             <div class="rules-list-wrap">
+              <div class="rules-list-head">
+                <div>
+                  <h4>Saved rules</h4>
+                  <p>Loaded from config/rules.json</p>
+                </div>
+              </div>
+
               <div id="rulesList" class="rules-list"></div>
             </div>
           </div>

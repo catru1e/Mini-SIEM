@@ -123,10 +123,10 @@ AppConfig ConfigLoader::load_from_file(const std::string& path) {
   }
 
   if (cfg.server.port <= 0) cfg.server.port = 8080;
-  if (cfg.dashboard.events_limit_default <= 0) cfg.dashboard.events_limit_default = 100;
-  if (cfg.dashboard.alerts_limit_default <= 0) cfg.dashboard.alerts_limit_default = 100;
-  if (cfg.dashboard.events_limit_max <= 0) cfg.dashboard.events_limit_max = 1000;
-  if (cfg.dashboard.alerts_limit_max <= 0) cfg.dashboard.alerts_limit_max = 1000;
+  if (cfg.dashboard.events_limit_default <= 0) cfg.dashboard.events_limit_default = 100000;
+  if (cfg.dashboard.alerts_limit_default <= 0) cfg.dashboard.alerts_limit_default = 100000;
+  if (cfg.dashboard.events_limit_max <= 0) cfg.dashboard.events_limit_max = 0;
+  if (cfg.dashboard.alerts_limit_max <= 0) cfg.dashboard.alerts_limit_max = 0;
 
   if (root.contains("paths") && root["paths"].is_object()) {
     const auto& p = root["paths"];

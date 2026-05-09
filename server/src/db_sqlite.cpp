@@ -212,8 +212,7 @@ void SqliteDb::insert_event(const std::string& event_id,
 }
 
 std::vector<DbEventRow> SqliteDb::get_last_events(int limit) {
-  if (limit <= 0) limit = 100;
-  if (limit > 1000) limit = 1000;
+  if (limit <= 0) limit = 10000;
 
   sqlite3* db = nullptr;
   int rc = sqlite3_open(db_path_.c_str(), &db);
@@ -512,8 +511,7 @@ void SqliteDb::insert_alert(const std::string& ts,
 
 
 std::vector<DbAlertRow> SqliteDb::get_last_alerts(int limit) {
-  if (limit <= 0) limit = 100;
-  if (limit > 1000) limit = 1000;
+  if (limit <= 0) limit = 10000;
 
   sqlite3* db = nullptr;
   int rc = sqlite3_open(db_path_.c_str(), &db);
