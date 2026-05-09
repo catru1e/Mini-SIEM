@@ -55,11 +55,18 @@ struct DashboardConfig {
   int alerts_limit_max = 0;
 };
 
+struct AuthConfig {
+  std::string db_path = "data/auth.db";
+  std::string session_cookie = "mini_siem_session";
+  int session_ttl_seconds = 86400;
+};
+
 struct AppConfig {
   ServerConfig server;
   AgentConfig agent;
   DetectionConfig detection;
   DashboardConfig dashboard;
+  AuthConfig auth;
   PathsConfig paths;
 };
 

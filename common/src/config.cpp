@@ -128,6 +128,16 @@ AppConfig ConfigLoader::load_from_file(const std::string& path) {
   if (cfg.dashboard.events_limit_max <= 0) cfg.dashboard.events_limit_max = 0;
   if (cfg.dashboard.alerts_limit_max <= 0) cfg.dashboard.alerts_limit_max = 0;
 
+  if (root.contains("auth") && root["auth"].is_object()) {
+    const auto& a = root["auth"];
+    cfg.auth.db_path = read_string_or_default(a, "db_path", cfg.auth.db_path);
+    cfg.auth.session_cookie = read_string_or_default(a, "session_cookie", cfg.auth.session_cookie);
+    cfg.auth.session_ttl_seconds =
+        read_int_or_default(a, "session_ttl_seconds", cfg.auth.session_ttl_seconds);
+  }
+
+  if (cfg.auth.session_ttl_seconds <= 0) cfg.auth.session_ttl_seconds = 86400;
+
   if (root.contains("paths") && root["paths"].is_object()) {
     const auto& p = root["paths"];
     cfg.paths.data_dir = read_string_or_default(p, "data_dir", cfg.paths.data_dir);

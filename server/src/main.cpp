@@ -12,6 +12,7 @@
 #include <deque>
 #include <memory>
 #include <random>
+#include <cstdlib>
 
 #include "httplib.h"
 #include "json.hpp"
@@ -19,6 +20,8 @@
 #include "detect.hpp"
 #include "correlate.hpp"
 #include "config.hpp"
+#include "auth_db.hpp"
+#include "session_store.hpp"
 
 using json = nlohmann::json;
 
@@ -460,6 +463,68 @@ static int clamp_limit(int requested, int def, int max_value) {
 
   return requested;
 }
+static std::string get_env_or_default(const char* name, const std::string& def) {
+  const char* value = std::getenv(name);
+  if (!value || std::string(value).empty()) return def;
+  return std::string(value);
+}
+
+static std::string trim_left_copy(std::string s) {
+  while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
+    s.erase(s.begin());
+  }
+  return s;
+}
+
+static std::string get_cookie_value(const httplib::Request& req, const std::string& name) {
+  if (!req.has_header("Cookie")) return "";
+
+  const std::string cookie = req.get_header_value("Cookie");
+  const std::string prefix = name + "=";
+
+  std::size_t start = 0;
+
+  while (start < cookie.size()) {
+    std::size_t end = cookie.find(';', start);
+    std::string part = cookie.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    part = trim_left_copy(part);
+
+    if (part.rfind(prefix, 0) == 0) {
+      return part.substr(prefix.size());
+    }
+
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+
+  return "";
+}
+
+static void set_auth_cookie(httplib::Response& res,
+                            const std::string& cookie_name,
+                            const std::string& session_id,
+                            int ttl_seconds) {
+  res.set_header(
+    "Set-Cookie",
+    cookie_name + "=" + session_id +
+    "; HttpOnly; SameSite=Lax; Path=/; Max-Age=" +
+    std::to_string(ttl_seconds)
+  );
+}
+
+static void clear_auth_cookie(httplib::Response& res, const std::string& cookie_name) {
+  res.set_header(
+    "Set-Cookie",
+    cookie_name + "=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"
+  );
+}
+
+static int role_level(const std::string& role) {
+  if (role == "admin") return 3;
+  if (role == "analyst") return 2;
+  if (role == "viewer") return 1;
+  return 0;
+}
 
 struct SseClient {
   std::mutex mutex;
@@ -480,6 +545,30 @@ int main() {
     DetectionEngine detector(db, config.detection);
     CorrelationEngine correlator(db);
 
+    AuthDb auth_db(config.auth.db_path);
+    auth_db.init();
+
+    SessionStore session_store(config.auth.db_path, config.auth.session_ttl_seconds);
+    session_store.init();
+
+    if (!auth_db.has_users()) {
+      const std::string admin_user =
+        get_env_or_default("MINI_SIEM_ADMIN_USER", "admin");
+      const std::string admin_password =
+        get_env_or_default("MINI_SIEM_ADMIN_PASSWORD", "admin123");
+
+      std::string err;
+      if (auth_db.create_user(admin_user, admin_password, "admin", true, false, err)) {
+        std::cerr << "[auth] created initial admin user: " << admin_user << "\n";
+      } else {
+        std::cerr << "[auth][ERR] failed to create initial admin: " << err << "\n";
+      }
+    }
+
+    const std::string agent_token =
+      get_env_or_default("MINI_SIEM_AGENT_TOKEN", "dev-agent-token");
+
+
     httplib::Server srv;
 
     std::mutex clients_mutex;
@@ -498,9 +587,351 @@ int main() {
       }
     };
 
+    auto read_session = [&](const httplib::Request& req, AuthSession& session) {
+      const std::string session_id = get_cookie_value(req, config.auth.session_cookie);
+      if (session_id.empty()) return false;
+      return session_store.find_session(session_id, session);
+    };
+
+    auto require_login = [&](const httplib::Request& req,
+                             httplib::Response& res,
+                             AuthSession& session) {
+      if (read_session(req, session)) {
+        return true;
+      }
+
+      send_json_response(res, 401, {
+        {"status", "error"},
+        {"message", "login required"}
+      });
+      return false;
+    };
+
+    auto require_role = [&](const httplib::Request& req,
+                            httplib::Response& res,
+                            const std::string& min_role,
+                            AuthSession& session) {
+      if (!require_login(req, res, session)) {
+        return false;
+      }
+
+      if (role_level(session.role) < role_level(min_role)) {
+      	  send_json_response(res, 403, {
+          {"status", "error"},
+          {"message", "permission denied"}
+        });
+        return false;
+      }
+
+      return true;
+    };
+
+    auto require_agent_token = [&](const httplib::Request& req,
+                                   httplib::Response& res) {
+      const std::string expected = "Bearer " + agent_token;
+
+      if (!req.has_header("Authorization") ||
+          req.get_header_value("Authorization") != expected) {
+        send_json_response(res, 401, {
+          {"status", "error"},
+          {"message", "agent token required"}
+        });
+        return false;
+      }
+
+      return true;
+    };
+
     // Healthcheck
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
       res.set_content("OK\n", "text/plain");
+    });
+
+    // Auth API
+    srv.Post("/api/auth/login", [&](const httplib::Request& req, httplib::Response& res) {
+      try {
+        json body = json::parse(req.body);
+
+        const std::string username = safe_string(body, "username", "");
+        const std::string password = safe_string(body, "password", "");
+
+        AuthUser user;
+        std::string err;
+
+        if (!auth_db.verify_user(username, password, user, err)) {
+          send_json_response(res, 401, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        const std::string session_id = session_store.create_session(user.username, user.role);
+        set_auth_cookie(res, config.auth.session_cookie, session_id, config.auth.session_ttl_seconds);
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"user", {
+            {"username", user.username},
+            {"role", user.role},
+            {"enabled", user.enabled},
+  	    {"password_change_required", user.password_change_required}
+          }}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Post("/api/auth/logout", [&](const httplib::Request& req, httplib::Response& res) {
+      const std::string session_id = get_cookie_value(req, config.auth.session_cookie);
+
+      if (!session_id.empty()) {
+        session_store.delete_session(session_id);
+      }
+
+      clear_auth_cookie(res, config.auth.session_cookie);
+
+      send_json_response(res, 200, {
+        {"status", "ok"}
+      });
+    });
+
+    srv.Get("/api/auth/me", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_login(req, res, session)) return;
+
+      bool password_change_required = false;
+      bool enabled = true;
+
+      try {
+        for (const auto& u : auth_db.get_users()) {
+          if (u.username == session.username) {
+            password_change_required = u.password_change_required;
+            enabled = u.enabled;
+            break;
+          }
+        }
+      } catch (...) {
+      // keep session data if user listing fails
+      }
+
+      if (!enabled) {
+        session_store.delete_session(session.id);
+        clear_auth_cookie(res, config.auth.session_cookie);
+
+        send_json_response(res, 401, {
+          {"status", "error"},
+          {"message", "user is disabled"}
+        });
+        return;
+      }
+
+      send_json_response(res, 200, {
+        {"status", "ok"},
+          {"user", {
+     	   {"username", session.username},
+     	   {"role", session.role},
+     	   {"enabled", enabled},
+     	   {"password_change_required", password_change_required}
+          }}
+        });
+      });
+
+srv.Post("/api/auth/change-password", [&](const httplib::Request& req, httplib::Response& res) {
+  AuthSession session;
+  if (!require_login(req, res, session)) return;
+
+  try {
+    json body = json::parse(req.body);
+
+    const std::string old_password = safe_string(body, "old_password", "");
+    const std::string new_password = safe_string(body, "new_password", "");
+
+    std::string err;
+    if (!auth_db.change_password(session.username, old_password, new_password, err)) {
+      send_json_response(res, 400, {
+        {"status", "error"},
+        {"message", err}
+      });
+      return;
+    }
+
+    send_json_response(res, 200, {
+      {"status", "ok"},
+      {"action", "password_changed"}
+    });
+  } catch (const std::exception& e) {
+    send_json_response(res, 400, {
+      {"status", "error"},
+      {"message", e.what()}
+    });
+  }
+});
+
+    // Users API
+    srv.Get("/api/users", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      try {
+        json arr = json::array();
+
+        for (const auto& u : auth_db.get_users()) {
+          arr.push_back({
+            {"id", u.id},
+            {"username", u.username},
+            {"role", u.role},
+            {"enabled", u.enabled},
+	    {"password_change_required", u.password_change_required},
+            {"created_at", u.created_at},
+            {"updated_at", u.updated_at}
+          });
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"users", arr}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Post("/api/users", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      try {
+        json body = json::parse(req.body);
+
+        const std::string username = safe_string(body, "username", "");
+        const std::string password = safe_string(body, "password", "");
+        const std::string role = safe_string(body, "role", "viewer");
+        const bool enabled = body.value("enabled", true);
+
+        std::string err;
+	if (!auth_db.create_user(username, password, role, enabled, true, err)) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        send_json_response(res, 201, {
+          {"status", "ok"},
+          {"action", "created"},
+          {"username", username}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Put(R"(/api/users/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      try {
+        const std::string username = req.matches[1].str();
+
+        json body = json::parse(req.body);
+
+        const std::string role = safe_string(body, "role", "viewer");
+        const bool enabled = body.value("enabled", true);
+
+        std::string err;
+        if (!auth_db.update_user(username, role, enabled, err)) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "updated"},
+          {"username", username}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Delete(R"(/api/users/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      const std::string username = req.matches[1].str();
+
+      if (username == session.username) {
+        send_json_response(res, 409, {
+          {"status", "error"},
+          {"message", "cannot delete current user"}
+        });
+        return;
+      }
+
+      std::string err;
+      if (!auth_db.delete_user(username, err)) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", err}
+        });
+        return;
+      }
+
+      send_json_response(res, 200, {
+        {"status", "ok"},
+        {"action", "deleted"},
+        {"username", username}
+      });
+    });
+
+    srv.Post(R"(/api/users/([^/]+)/password)", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      try {
+        const std::string username = req.matches[1].str();
+
+        json body = json::parse(req.body);
+        const std::string password = safe_string(body, "password", "");
+
+        std::string err;
+	if (!auth_db.update_password(username, password, true, err)) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "password_updated"},
+          {"username", username}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
     });
 
     // Static: index
@@ -537,7 +968,10 @@ int main() {
       res.set_content(content, "text/css; charset=UTF-8");
     });
 
-    srv.Get("/stream", [&](const httplib::Request&, httplib::Response& res){
+    srv.Get("/stream", [&](const httplib::Request& req, httplib::Response& res){
+      AuthSession session;
+      if (!require_login(req, res, session)) return;
+
       res.set_header("Cache-Control", "no-cache");
       res.set_header("Connection", "keep-alive");
       res.set_header("X-Accel-Buffering", "no");
@@ -604,7 +1038,10 @@ int main() {
     std::mutex rules_file_mutex;
 
     // Rules API
-    srv.Get("/api/rules", [&](const httplib::Request&, httplib::Response& res) {
+    srv.Get("/api/rules", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "analyst", session)) return;
+
       std::lock_guard<std::mutex> lock(rules_file_mutex);
 
       json rules;
@@ -634,6 +1071,9 @@ int main() {
     });
 
     srv.Post("/api/rules", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
       std::lock_guard<std::mutex> lock(rules_file_mutex);
 
       try {
@@ -704,6 +1144,9 @@ int main() {
     });
 
     srv.Put(R"(/api/rules/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
       std::lock_guard<std::mutex> lock(rules_file_mutex);
 
       try {
@@ -776,6 +1219,9 @@ int main() {
     });
 
     srv.Delete(R"(/api/rules/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
       std::lock_guard<std::mutex> lock(rules_file_mutex);
 
       try {
@@ -842,7 +1288,10 @@ int main() {
     std::mutex dashboards_file_mutex;
 
     // Dashboards API
-    srv.Get("/api/dashboards", [&](const httplib::Request&, httplib::Response& res) {
+    srv.Get("/api/dashboards", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_login(req, res, session)) return;
+
       std::lock_guard<std::mutex> lock(dashboards_file_mutex);
 
       json root;
@@ -881,6 +1330,9 @@ int main() {
     });
 
     srv.Post("/api/dashboards", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
       std::lock_guard<std::mutex> lock(dashboards_file_mutex);
 
       try {
@@ -986,6 +1438,9 @@ int main() {
     });
 
     srv.Put(R"(/api/dashboards/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
       std::lock_guard<std::mutex> lock(dashboards_file_mutex);
 
       try {
@@ -1084,6 +1539,9 @@ int main() {
     });
 
     srv.Delete(R"(/api/dashboards/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
       std::lock_guard<std::mutex> lock(dashboards_file_mutex);
 
       try {
@@ -1164,6 +1622,8 @@ int main() {
 
     // Ingest endpoint
     srv.Post("/ingest", [&](const httplib::Request& req, httplib::Response& res) {
+      if (!require_agent_token(req, res)) return;
+
       try {
         auto j = json::parse(req.body);
 
@@ -1257,7 +1717,10 @@ int main() {
     });
 
     // Dashboard stats API
-    srv.Get("/api/stats", [&](const httplib::Request&, httplib::Response& res) {
+    srv.Get("/api/stats", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_login(req, res, session)) return;
+
       try {
         const auto events_by_type = db.count_events_by_event_type();
         const auto events_by_source_type = db.count_events_by_source_type();
@@ -1323,6 +1786,9 @@ int main() {
 
     // Get last events
     srv.Get("/api/events", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_login(req, res, session)) return;
+
       int limit = config.dashboard.events_limit_default;
       if (req.has_param("limit")) {
         try {
@@ -1367,6 +1833,9 @@ int main() {
 
     // Get last alerts
     srv.Get("/api/alerts", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_login(req, res, session)) return;
+
       int limit = config.dashboard.alerts_limit_default;
       if (req.has_param("limit")) {
         try {

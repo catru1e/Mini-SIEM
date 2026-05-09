@@ -9,8 +9,30 @@ const pageSubtitle = $("pageSubtitle");
 const refreshBtn = $("refreshBtn");
 const autoRefreshBtn = $("autoRefreshBtn");
 const themeToggleBtn = $("themeToggleBtn");
+const loginThemeToggleBtn = $("loginThemeToggleBtn");
 const clearOpenBtn = $("clearOpenBtn");
 const limitInput = $("limitInput");
+
+const loginScreen = $("loginScreen");
+const appShell = $("appShell");
+const loginForm = $("loginForm");
+const loginUsernameInput = $("loginUsernameInput");
+const loginPasswordInput = $("loginPasswordInput");
+const loginMessage = $("loginMessage");
+
+const currentUserText = $("currentUserText");
+const currentRoleText = $("currentRoleText");
+const logoutBtn = $("logoutBtn");
+
+const changePasswordOpenBtn = $("changePasswordOpenBtn");
+const passwordModal = $("passwordModal");
+const passwordModalText = $("passwordModalText");
+const passwordMessage = $("passwordMessage");
+const oldPasswordInput = $("oldPasswordInput");
+const newOwnPasswordInput = $("newOwnPasswordInput");
+const repeatOwnPasswordInput = $("repeatOwnPasswordInput");
+const changePasswordBtn = $("changePasswordBtn");
+const cancelPasswordBtn = $("cancelPasswordBtn");
 
 const topTotalEvents = $("topTotalEvents");
 const topHotAlerts = $("topHotAlerts");
@@ -40,6 +62,17 @@ const rulesList = $("rulesList");
 const eventsCount = $("eventsCount");
 const alertsCount = $("alertsCount");
 const rulesCount = $("rulesCount");
+
+const usersCount = $("usersCount");
+const userMessage = $("userMessage");
+const usersList = $("usersList");
+
+const newUsernameInput = $("newUsernameInput");
+const newPasswordInput = $("newPasswordInput");
+const newRoleInput = $("newRoleInput");
+const newEnabledInput = $("newEnabledInput");
+const createUserBtn = $("createUserBtn");
+const clearUserFormBtn = $("clearUserFormBtn");
 
 const ruleMessage = $("ruleMessage");
 const ruleFormTitle = $("ruleFormTitle");
@@ -1346,6 +1379,9 @@ let autoRefreshEnabled = false;
 let autoRefreshTimer = null;
 let currentTheme = localStorage.getItem("mini_siem_theme") || "horror";
 
+let currentUser = null;
+let allUsers = [];
+
 const openedPanels = new Set();
 const eventPools = {};
 const alertPools = {};
@@ -1368,6 +1404,10 @@ const tabMeta = {
   rules: {
     title: "Visual Detection Rule Editor",
     subtitle: "Create, validate, preview and save JSON-based SIEM detection rules."
+  },
+  users: {
+    title: "User Management",
+    subtitle: "Admin console for local Mini SIEM accounts and roles."
   }
 };
 
@@ -1559,18 +1599,29 @@ function cloneJson(value) {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
-  const text = await response.text();
+  const res = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+    headers: {
+      ...(options.headers || {})
+    }
+  });
 
-  let data = {};
+  let data = null;
+
   try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
+    data = await res.json();
+  } catch (_) {
+    data = null;
   }
 
-  if (!response.ok) {
-    throw new Error(data.message || data.raw || `HTTP ${response.status}`);
+  if (res.status === 401) {
+    showLogin();
+    throw new Error(data?.message || "login required");
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.message || `HTTP ${res.status}`);
   }
 
   return data;
@@ -2380,12 +2431,141 @@ function renderRules() {
   }).join("");
 }
 
+function canAdmin() {
+  return currentUser && currentUser.role === "admin";
+}
+
+function canEditRules() {
+  return currentUser && currentUser.role === "admin";
+}
+
+function canViewRules() {
+  return currentUser && (currentUser.role === "admin" || currentUser.role === "analyst");
+}
+
+function setUserMessage(message, type = "info") {
+  if (!userMessage) return;
+  userMessage.textContent = message || "";
+  userMessage.className = `rule-message ${type}`;
+}
+
+function updateAuthUi() {
+  const username = currentUser?.username || "—";
+  const role = currentUser?.role || "—";
+
+  document.body.dataset.role = role;
+
+  document.body.classList.toggle(
+    "password-required",
+    Boolean(currentUser?.password_change_required)
+  );
+
+  if (currentUserText) currentUserText.textContent = username;
+  if (currentRoleText) currentRoleText.textContent = `role: ${role}`;
+
+  document.querySelectorAll(".admin-only").forEach((el) => {
+    el.classList.toggle("hidden", !canAdmin());
+  });
+
+  const rulesBtn = document.querySelector('.nav-btn[data-tab="rules"]');
+  if (rulesBtn) {
+    rulesBtn.classList.toggle("hidden", !canViewRules());
+  }
+
+  if (!canViewRules() && document.querySelector("#tabRules.active")) {
+    activateTab("dashboard");
+  }
+
+  if (!canAdmin() && document.querySelector("#tabUsers.active")) {
+    activateTab("dashboard");
+  }
+}
+
+function showLogin() {
+  currentUser = null;
+
+  if (loginScreen) loginScreen.classList.remove("hidden");
+  if (appShell) appShell.classList.add("app-hidden");
+
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+
+  updateAuthUi();
+}
+
+function showApp() {
+  if (loginScreen) loginScreen.classList.add("hidden");
+  if (appShell) appShell.classList.remove("app-hidden");
+
+  updateAuthUi();
+
+  if (currentUser?.password_change_required) {
+    openPasswordModal(true);
+  }
+}
+
+function renderUsers() {
+  if (!usersList) return;
+
+  if (usersCount) {
+    usersCount.textContent = allUsers.length;
+  }
+
+  if (!allUsers.length) {
+    usersList.innerHTML = `<div class="empty">No users found.</div>`;
+    return;
+  }
+
+  usersList.innerHTML = allUsers.map((user) => {
+    const enabled = user.enabled !== false;
+    const role = escapeHtml(user.role || "viewer");
+    const username = escapeHtml(user.username || "");
+    const disabledClass = enabled ? "" : "disabled";
+
+    return `
+      <article class="user-card ${disabledClass}">
+        <div class="user-main-row">
+          <div>
+            <div class="user-name">${username}</div>
+            <div class="user-meta">
+              role=${role}<br />
+		enabled=${enabled ? "true" : "false"}<br />
+		temporary_password=${user.password_change_required ? "true" : "false"}<br />
+		created_at=${escapeHtml(user.created_at || "")}
+            </div>
+          </div>
+
+          <span class="rule-state ${enabled ? "enabled" : "disabled"}">
+            ${enabled ? "enabled" : "disabled"}
+          </span>
+        </div>
+
+        <div class="user-actions">
+          <button onclick="changeUserRole('${escapeAttr(user.username)}')">Role</button>
+          <button onclick="toggleUserEnabled('${escapeAttr(user.username)}')">${enabled ? "Disable" : "Enable"}</button>
+          <button onclick="resetUserPassword('${escapeAttr(user.username)}')">Password</button>
+          <button class="delete" onclick="deleteUser('${escapeAttr(user.username)}')">Delete</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
 function renderAll() {
   closeAllPanels();
   renderDashboard();
   renderEvents();
   renderAlerts();
-  renderRules();
+
+  if (canViewRules()) {
+    renderRules();
+  }
+
+  if (canAdmin()) {
+    renderUsers();
+  }
 
   if (currentCustomDashboard) {
     renderCustomDashboardBuilder();
@@ -2402,18 +2582,41 @@ async function loadAll(options = {}) {
 
     const limit = getLimit();
 
-    const [statsData, eventsData, alertsData, rulesData, dashboardsData] = await Promise.all([
+    const baseRequests = [
       fetchJson("/api/stats"),
       fetchJson(`/api/events?limit=${limit}`),
-      fetchJson(`/api/alerts?limit=${limit}`),
-      fetchJson("/api/rules"),
-      fetchJson("/api/dashboards")
-    ]);
+      fetchJson(`/api/alerts?limit=${limit}`)
+    ];
+
+    if (canViewRules()) {
+      baseRequests.push(fetchJson("/api/rules"));
+    } else {
+      baseRequests.push(Promise.resolve({ rules: [] }));
+    }
+
+    baseRequests.push(fetchJson("/api/dashboards"));
+
+    if (canAdmin()) {
+      baseRequests.push(fetchJson("/api/users"));
+    } else {
+      baseRequests.push(Promise.resolve({ users: [] }));
+    }
+
+    const [
+      statsData,
+      eventsData,
+      alertsData,
+      rulesData,
+      dashboardsData,
+      usersData
+    ] = await Promise.all(baseRequests);
 
     stats = statsData || {};
     allEvents = Array.isArray(eventsData.events) ? eventsData.events : [];
     allAlerts = Array.isArray(alertsData.alerts) ? alertsData.alerts : [];
     allRules = Array.isArray(rulesData.rules) ? rulesData.rules : [];
+    allUsers = Array.isArray(usersData.users) ? usersData.users : [];
+
     customDashboards = Array.isArray(dashboardsData.dashboards)
       ? dashboardsData.dashboards.map(normalizeDashboard)
       : [];
@@ -2432,10 +2635,11 @@ async function loadAll(options = {}) {
         selectedCustomDashboardId = refreshed.id;
       }
     }
-      renderAll();
 
-      setStatus(autoRefreshEnabled ? "Auto-refresh ON" : "Manual mode");
-      touchUpdateTime();
+    renderAll();
+
+    setStatus(autoRefreshEnabled ? "Auto-refresh ON" : "Manual mode");
+    touchUpdateTime();
   } catch (err) {
     console.error(err);
     setStatus("Load failed");
@@ -2876,6 +3080,11 @@ function editRule(id) {
 }
 
 async function createRule() {
+  if (!canEditRules()) {
+    setRuleMessage("Only admin can change rules.", "error");
+    return;
+  }
+
   try {
     const rule = ruleFromForm();
 
@@ -2898,6 +3107,11 @@ async function createRule() {
 }
 
 async function updateRule() {
+  if (!canEditRules()) {
+    setRuleMessage("Only admin can change rules.", "error");
+    return;
+  }
+
   try {
     if (!editingRuleId) {
       throw new Error("No rule selected");
@@ -2925,6 +3139,11 @@ async function updateRule() {
 }
 
 async function toggleRule(id) {
+  if (!canEditRules()) {
+    setRuleMessage("Only admin can change rules.", "error");
+    return;
+  }
+
   try {
     const rule = allRules.find((item) => item.id === id);
 
@@ -2952,6 +3171,11 @@ async function toggleRule(id) {
 }
 
 async function deleteRule(id) {
+  if (!canEditRules()) {
+    setRuleMessage("Only admin can change rules.", "error");
+    return;
+  }
+
   if (!confirm(`Delete rule ${id}?`)) return;
 
   try {
@@ -2975,9 +3199,22 @@ async function deleteRule(id) {
 function applyTheme() {
   document.body.classList.toggle("theme-cute", currentTheme === "cute");
 
-  themeToggleBtn.textContent = currentTheme === "cute"
-    ? "Theme: Cute pink"
-    : "Theme: Horror red";
+  const icon = currentTheme === "cute" ? "☀" : "🌙";
+  const label = currentTheme === "cute"
+    ? "Current theme: cute pink"
+    : "Current theme: horror red";
+
+  if (themeToggleBtn) {
+    themeToggleBtn.textContent = icon;
+    themeToggleBtn.title = label;
+    themeToggleBtn.setAttribute("aria-label", label);
+  }
+
+  if (loginThemeToggleBtn) {
+    loginThemeToggleBtn.textContent = icon;
+    loginThemeToggleBtn.title = label;
+    loginThemeToggleBtn.setAttribute("aria-label", label);
+  }
 
   localStorage.setItem("mini_siem_theme", currentTheme);
 }
@@ -3079,6 +3316,7 @@ function bindEvents() {
   refreshBtn.addEventListener("click", () => loadAll());
   autoRefreshBtn.addEventListener("click", toggleAutoRefresh);
   themeToggleBtn.addEventListener("click", toggleTheme);
+  loginThemeToggleBtn.addEventListener("click", toggleTheme);
   clearOpenBtn.addEventListener("click", closeAllPanels);
   limitInput.addEventListener("change", () => loadAll());
 
@@ -3127,6 +3365,34 @@ function bindEvents() {
     clearWidgetFormBtn.addEventListener("click", clearWidgetForm);
   }
 
+  if (loginForm) {
+    loginForm.addEventListener("submit", loginUser);
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", logoutUser);
+  }
+
+  if (changePasswordOpenBtn) {
+    changePasswordOpenBtn.addEventListener("click", () => openPasswordModal(false));
+  }
+
+  if (changePasswordBtn) {
+    changePasswordBtn.addEventListener("click", changeOwnPassword);
+  }
+
+  if (cancelPasswordBtn) {
+    cancelPasswordBtn.addEventListener("click", closePasswordModal);
+  }
+
+  if (createUserBtn) {
+    createUserBtn.addEventListener("click", createUser);
+  }
+
+  if (clearUserFormBtn) {
+    clearUserFormBtn.addEventListener("click", clearUserForm);
+  }
+
   [
     customDashboardTitleInput,
     customDashboardDescriptionInput,
@@ -3158,6 +3424,316 @@ function bindEvents() {
   bindRulePreviewEvents();
 }
 
+function clearPasswordForm() {
+  if (oldPasswordInput) oldPasswordInput.value = "";
+  if (newOwnPasswordInput) newOwnPasswordInput.value = "";
+  if (repeatOwnPasswordInput) repeatOwnPasswordInput.value = "";
+
+  if (passwordMessage) {
+    passwordMessage.textContent = "";
+    passwordMessage.className = "login-message";
+  }
+}
+
+function openPasswordModal(required = false) {
+  clearPasswordForm();
+
+  if (passwordModalText) {
+    passwordModalText.textContent = required
+      ? "This password is temporary. Please change it before using Mini SIEM."
+      : "Update your account password.";
+  }
+
+  if (passwordModal) {
+    passwordModal.classList.remove("hidden");
+  }
+
+  document.body.classList.toggle("password-required", required);
+}
+
+function closePasswordModal() {
+  if (currentUser?.password_change_required) {
+    return;
+  }
+
+  if (passwordModal) {
+    passwordModal.classList.add("hidden");
+  }
+
+  clearPasswordForm();
+}
+
+async function changeOwnPassword() {
+  try {
+    const oldPassword = oldPasswordInput.value;
+    const newPassword = newOwnPasswordInput.value;
+    const repeatPassword = repeatOwnPasswordInput.value;
+
+    if (!oldPassword || !newPassword || !repeatPassword) {
+      throw new Error("All password fields are required.");
+    }
+
+    if (newPassword !== repeatPassword) {
+      throw new Error("New passwords do not match.");
+    }
+
+    if (newPassword.length < 6) {
+      throw new Error("Password must contain at least 6 characters.");
+    }
+
+    await fetchJson("/api/auth/change-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        old_password: oldPassword,
+        new_password: newPassword
+      })
+    });
+
+    if (currentUser) {
+      currentUser.password_change_required = false;
+    }
+
+    document.body.classList.remove("password-required");
+
+    if (passwordModal) {
+      passwordModal.classList.add("hidden");
+    }
+
+    clearPasswordForm();
+    updateAuthUi();
+    await loadAll();
+
+  } catch (err) {
+    if (passwordMessage) {
+      passwordMessage.textContent = err.message;
+      passwordMessage.className = "login-message error";
+    }
+  }
+}
+
+async function checkAuth() {
+  try {
+    const data = await fetchJson("/api/auth/me");
+    currentUser = data.user || null;
+
+    showApp();
+    await loadAll();
+  } catch (_) {
+    showLogin();
+  }
+}
+
+async function loginUser(event) {
+  event.preventDefault();
+
+  if (loginMessage) {
+    loginMessage.textContent = "Signing in...";
+    loginMessage.className = "login-message";
+  }
+
+  try {
+    const body = {
+      username: loginUsernameInput.value.trim(),
+      password: loginPasswordInput.value
+    };
+
+    const data = await fetchJson("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    currentUser = data.user || null;
+
+    if (loginPasswordInput) {
+      loginPasswordInput.value = "";
+    }
+
+    if (loginMessage) {
+      loginMessage.textContent = "";
+      loginMessage.className = "login-message";
+    }
+
+    showApp();
+    await loadAll();
+  } catch (err) {
+    if (loginMessage) {
+      loginMessage.textContent = err.message;
+      loginMessage.className = "login-message error";
+    }
+  }
+}
+
+async function logoutUser() {
+  try {
+    await fetchJson("/api/auth/logout", {
+      method: "POST"
+    });
+  } catch (_) {
+    // logout should still clear local UI
+  }
+
+  showLogin();
+}
+
+function clearUserForm() {
+  if (newUsernameInput) newUsernameInput.value = "";
+  if (newPasswordInput) newPasswordInput.value = "";
+  if (newRoleInput) newRoleInput.value = "viewer";
+  if (newEnabledInput) newEnabledInput.checked = true;
+  setUserMessage("");
+}
+
+async function loadUsersOnly() {
+  if (!canAdmin()) return;
+
+  const data = await fetchJson("/api/users");
+  allUsers = Array.isArray(data.users) ? data.users : [];
+  renderUsers();
+}
+
+async function createUser() {
+  if (!canAdmin()) return;
+
+  try {
+    const body = {
+      username: newUsernameInput.value.trim(),
+      password: newPasswordInput.value,
+      role: newRoleInput.value || "viewer",
+      enabled: newEnabledInput.checked
+    };
+
+    await fetchJson("/api/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    clearUserForm();
+    await loadUsersOnly();
+    setUserMessage("User created.", "ok");
+  } catch (err) {
+    setUserMessage(err.message, "error");
+  }
+}
+
+async function changeUserRole(username) {
+  if (!canAdmin()) return;
+
+  const user = allUsers.find((item) => item.username === username);
+  if (!user) return;
+
+  const nextRole = prompt("New role: admin / analyst / viewer", user.role || "viewer");
+  if (!nextRole) return;
+
+  const normalizedRole = nextRole.trim();
+
+  if (!["admin", "analyst", "viewer"].includes(normalizedRole)) {
+    alert("Invalid role");
+    return;
+  }
+
+  try {
+    await fetchJson(`/api/users/${encodeURIComponent(username)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        role: normalizedRole,
+        enabled: user.enabled !== false
+      })
+    });
+
+    await loadUsersOnly();
+    setUserMessage("User role updated.", "ok");
+  } catch (err) {
+    setUserMessage(err.message, "error");
+  }
+}
+
+async function toggleUserEnabled(username) {
+  if (!canAdmin()) return;
+
+  const user = allUsers.find((item) => item.username === username);
+  if (!user) return;
+
+  if (currentUser && currentUser.username === username && user.enabled !== false) {
+    alert("You cannot disable your current user.");
+    return;
+  }
+
+  try {
+    await fetchJson(`/api/users/${encodeURIComponent(username)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        role: user.role || "viewer",
+        enabled: !(user.enabled !== false)
+      })
+    });
+
+    await loadUsersOnly();
+    setUserMessage("User updated.", "ok");
+  } catch (err) {
+    setUserMessage(err.message, "error");
+  }
+}
+
+async function resetUserPassword(username) {
+  if (!canAdmin()) return;
+
+  const password = prompt(`New password for ${username}:`);
+  if (!password) return;
+
+  try {
+    await fetchJson(`/api/users/${encodeURIComponent(username)}/password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        password
+      })
+    });
+
+    setUserMessage("Password updated.", "ok");
+  } catch (err) {
+    setUserMessage(err.message, "error");
+  }
+}
+
+async function deleteUser(username) {
+  if (!canAdmin()) return;
+
+  if (currentUser && currentUser.username === username) {
+    alert("You cannot delete your current user.");
+    return;
+  }
+
+  if (!confirm(`Delete user ${username}?`)) return;
+
+  try {
+    await fetchJson(`/api/users/${encodeURIComponent(username)}`, {
+      method: "DELETE"
+    });
+
+    await loadUsersOnly();
+    setUserMessage("User deleted.", "ok");
+  } catch (err) {
+    setUserMessage(err.message, "error");
+  }
+}
+
 window.toggleEventPanel = toggleEventPanel;
 window.toggleAlertPanel = toggleAlertPanel;
 window.toggleRuleDetails = toggleRuleDetails;
@@ -3181,4 +3757,4 @@ renderConditions();
 activateTab("dashboard");
 activateDashboardMode(currentDashboardMode);
 updateRulePreview();
-loadAll();
+checkAuth();

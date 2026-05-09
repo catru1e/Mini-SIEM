@@ -37,6 +37,11 @@
     "events_limit_max": 0,
     "alerts_limit_max": 0
   },
+  "auth": {
+    "db_path": "data/auth.db",
+    "session_cookie": "mini_siem_session",
+    "session_ttl_seconds": 86400
+  },
   "paths": {
     "data_dir": "data",
     "logs_dir": "logs"

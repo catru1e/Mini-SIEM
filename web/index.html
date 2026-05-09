@@ -7,7 +7,48 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <section id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="brand login-brand">
+        <div class="brand-mark">MS</div>
+        <div>
+          <h1>Mini SIEM</h1>
+          <p>Secure Threat Console</p>
+        </div>
+      </div>
+
+      <div class="login-title">
+        <h2>Sign in</h2>
+        <p>Use your Mini SIEM account to open dashboards, events, alerts and rules.</p>
+      </div>
+
+	<button
+ 	 id="loginThemeToggleBtn"
+ 	 class="theme-icon-btn login-theme-btn"
+ 	 type="button"
+ 	 aria-label="Toggle theme"
+ 	 title="Toggle theme"
+	></button>
+
+      <div id="loginMessage" class="login-message"></div>
+
+      <form id="loginForm" class="login-form">
+        <div class="field">
+          <label>Username</label>
+          <input id="loginUsernameInput" type="text" autocomplete="username" value="admin" />
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <input id="loginPasswordInput" type="password" autocomplete="current-password" />
+        </div>
+
+        <button class="danger-main-btn" type="submit">Sign in</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell app-hidden">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">MS</div>
@@ -17,12 +58,23 @@
         </div>
       </div>
 
-      <nav class="nav">
-        <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="nav-btn" data-tab="events">Events</button>
-        <button class="nav-btn" data-tab="alerts">Alerts</button>
-        <button class="nav-btn" data-tab="rules">Rules</button>
-      </nav>
+	<nav class="nav">
+ 	 <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+ 	 <button class="nav-btn" data-tab="events">Events</button>
+ 	 <button class="nav-btn" data-tab="alerts">Alerts</button>
+ 	 <button class="nav-btn" data-tab="rules">Rules</button>
+ 	 <button class="nav-btn admin-only" data-tab="users">Users</button>
+	</nav>
+
+	<div class="side-card auth-side-card">
+	  <div class="side-title">Session</div>
+	  <div class="current-user-box">
+	    <strong id="currentUserText">—</strong>
+	    <span id="currentRoleText">—</span>
+	  </div>
+	  <button id="changePasswordOpenBtn" class="ghost-btn">Change password</button>
+	  <button id="logoutBtn" class="ghost-btn">Logout</button>
+	</div>
 
       <div class="side-card">
         <div class="side-title">Runtime</div>
@@ -37,7 +89,13 @@
         <div class="side-title">Controls</div>
         <button id="refreshBtn" class="danger-main-btn">Refresh data</button>
         <button id="autoRefreshBtn" class="ghost-btn">Auto-refresh: OFF</button>
-        <button id="themeToggleBtn" class="ghost-btn">Theme: Horror red</button>
+<button
+  id="themeToggleBtn"
+  class="theme-icon-btn"
+  type="button"
+  aria-label="Toggle theme"
+  title="Toggle theme"
+></button>
         <button id="clearOpenBtn" class="ghost-btn">Close all opened panels</button>
       </div>
 
@@ -639,6 +697,9 @@
 
       <section id="tabRules" class="tab-view">
         <section class="panel">
+          <div class="analyst-readonly-note">
+            Analyst mode: rules are visible for investigation, but only admin can create, edit or delete them.
+          </div>
           <div class="panel-head">
             <div>
               <h3>Visual Detection Rule Editor</h3>
@@ -872,9 +933,101 @@
           </div>
         </section>
       </section>
+      <section id="tabUsers" class="tab-view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>User Management</h3>
+              <p>Create, disable, reset password or delete Mini SIEM users.</p>
+            </div>
+            <span id="usersCount" class="count-pill">0</span>
+          </div>
+
+          <div id="userMessage" class="rule-message"></div>
+
+          <div class="users-grid">
+            <section class="user-editor">
+              <h4>Create user</h4>
+
+              <div class="rule-form-grid">
+                <div class="field">
+                  <label>Username</label>
+                  <input id="newUsernameInput" type="text" placeholder="analyst1" />
+                </div>
+
+                <div class="field">
+                  <label>Password</label>
+                  <input id="newPasswordInput" type="password" placeholder="temporary password" />
+                </div>
+
+                <div class="field">
+                  <label>Role</label>
+                  <select id="newRoleInput">
+                    <option value="viewer">viewer</option>
+                    <option value="analyst">analyst</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </div>
+
+                <label class="check-field">
+                  <input id="newEnabledInput" type="checkbox" checked />
+                  <span>Enabled</span>
+                </label>
+              </div>
+
+              <div class="form-actions user-form-actions">
+                <button id="createUserBtn" class="danger-main-btn">Create user</button>
+                <button id="clearUserFormBtn" class="ghost-btn">Clear form</button>
+              </div>
+            </section>
+
+            <section class="users-list-wrap">
+              <div class="rules-list-head">
+                <div>
+                  <h4>Saved users</h4>
+                  <p>Loaded from data/auth.db</p>
+                </div>
+              </div>
+
+              <div id="usersList" class="users-list"></div>
+            </section>
+          </div>
+        </section>
+      </section>
     </main>
   </div>
+  <section id="passwordModal" class="password-modal hidden">
+  <div class="password-card">
+    <div class="password-card-head">
+      <div>
+        <h3>Change password</h3>
+        <p id="passwordModalText">Update your account password.</p>
+      </div>
+    </div>
 
+    <div id="passwordMessage" class="login-message"></div>
+
+    <div class="login-form">
+      <div class="field">
+        <label>Current password</label>
+        <input id="oldPasswordInput" type="password" autocomplete="current-password" />
+      </div>
+
+      <div class="field">
+        <label>New password</label>
+        <input id="newOwnPasswordInput" type="password" autocomplete="new-password" />
+      </div>
+
+      <div class="field">
+        <label>Repeat new password</label>
+        <input id="repeatOwnPasswordInput" type="password" autocomplete="new-password" />
+      </div>
+
+      <button id="changePasswordBtn" class="danger-main-btn" type="button">Save password</button>
+      <button id="cancelPasswordBtn" class="ghost-btn" type="button">Cancel</button>
+    </div>
+  </div>
+</section>
   <script src="/app.js"></script>
 </body>
 </html>

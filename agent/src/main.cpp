@@ -144,6 +144,9 @@ int main() {
 
     HttpClient client(config.server.host, config.server.port);
 
+    const char* agent_token_env = std::getenv("MINI_SIEM_AGENT_TOKEN");
+    client.set_bearer_token(agent_token_env ? std::string(agent_token_env) : "dev-agent-token");
+
     const std::string host = get_hostname_safe();
     const std::string ssh_watch_path = config.agent.ssh_watch_path;
     const std::string state_path = config.agent.state_path;

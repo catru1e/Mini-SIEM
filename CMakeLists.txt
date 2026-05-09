@@ -27,10 +27,14 @@ add_executable(mini_siem_server
   server/src/detect.hpp
   server/src/correlate.cpp
   server/src/correlate.hpp
+  server/src/auth_db.cpp
+  server/src/auth_db.hpp
+  server/src/session_store.cpp
+  server/src/session_store.hpp
   ${COMMON_SOURCES}
 )
 
-target_link_libraries(mini_siem_server PRIVATE sqlite3)
+target_link_libraries(mini_siem_server PRIVATE sqlite3 sodium)
 
 # ---- agent  ----
 add_executable(mini_siem_agent
