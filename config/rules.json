@@ -1,150 +1,225 @@
 [
   {
+    "description": "Detected {{count}} failed login attempts from IP {{group_key}} within {{window_sec}} seconds.",
+    "enabled": true,
+    "event_types": [
+      "auth_failed",
+      "failed_login"
+    ],
+    "group_by": "src_ip",
     "id": "RULE_FAILED_LOGIN_IP",
-    "enabled": true,
-    "type": "threshold",
-    "event_types": ["auth_failed", "failed_login"],
-    "source_types": ["auth"],
-    "group_by": "src_ip",
-    "threshold": 5,
-    "window_sec": 300,
-    "suppress_sec": 60,
     "severity": "high",
+    "source_types": [
+      "auth"
+    ],
+    "suppress_sec": 60,
+    "threshold": 5,
     "title": "Brute force from IP",
-    "description": "Detected {{count}} failed login attempts from IP {{group_key}} within {{window_sec}} seconds."
+    "type": "threshold",
+    "window_sec": 300
   },
   {
+    "description": "Detected {{count}} failed login attempts for user {{group_key}} within {{window_sec}} seconds.",
+    "enabled": true,
+    "event_types": [
+      "auth_failed",
+      "failed_login"
+    ],
+    "group_by": "user",
     "id": "RULE_FAILED_LOGIN_USER",
-    "enabled": true,
-    "type": "threshold",
-    "event_types": ["auth_failed", "failed_login"],
-    "source_types": ["auth"],
-    "group_by": "user",
-    "threshold": 5,
-    "window_sec": 300,
-    "suppress_sec": 60,
     "severity": "high",
+    "source_types": [
+      "auth"
+    ],
+    "suppress_sec": 60,
+    "threshold": 5,
     "title": "Multiple failed logins for user",
-    "description": "Detected {{count}} failed login attempts for user {{group_key}} within {{window_sec}} seconds."
+    "type": "threshold",
+    "window_sec": 300
   },
   {
-    "id": "RULE_INVALID_USER_IP",
+    "description": "Detected {{count}} invalid-user attempts from IP {{group_key}} within {{window_sec}} seconds.",
     "enabled": true,
-    "type": "threshold",
-    "event_types": ["auth_invalid_user", "invalid_user"],
-    "source_types": ["auth"],
+    "event_types": [
+      "auth_invalid_user",
+      "invalid_user"
+    ],
     "group_by": "src_ip",
+    "id": "RULE_INVALID_USER_IP",
+    "severity": "medium",
+    "source_types": [
+      "auth"
+    ],
+    "suppress_sec": 60,
     "threshold": 5,
-    "window_sec": 300,
-    "suppress_sec": 60,
-    "severity": "medium",
     "title": "Invalid users from IP",
-    "description": "Detected {{count}} invalid-user attempts from IP {{group_key}} within {{window_sec}} seconds."
+    "type": "threshold",
+    "window_sec": 300
   },
   {
+    "description": "Detected {{count}} privilege escalation events for user {{group_key}} within {{window_sec}} seconds.",
+    "enabled": true,
+    "event_types": [
+      "privilege_escalation"
+    ],
+    "group_by": "user",
     "id": "RULE_SUDO_FREQUENCY_USER",
-    "enabled": true,
-    "type": "threshold",
-    "event_types": ["privilege_escalation"],
-    "source_types": ["auth"],
-    "group_by": "user",
+    "severity": "medium",
+    "source_types": [
+      "auth"
+    ],
+    "suppress_sec": 60,
     "threshold": 3,
-    "window_sec": 300,
-    "suppress_sec": 60,
-    "severity": "medium",
     "title": "Suspicious sudo usage",
-    "description": "Detected {{count}} privilege escalation events for user {{group_key}} within {{window_sec}} seconds."
-  },
-  {
-    "id": "RULE_SUCCESS_LOGIN_USER",
-    "enabled": true,
     "type": "threshold",
-    "event_types": ["auth_success", "accepted_login"],
-    "source_types": ["auth"],
-    "group_by": "user",
-    "threshold": 10,
-    "window_sec": 120,
-    "suppress_sec": 60,
-    "severity": "medium",
-    "title": "Too many successful logins",
-    "description": "Detected {{count}} successful logins for user {{group_key}} within {{window_sec}} seconds."
+    "window_sec": 300
   },
   {
-    "id": "RULE_BLACKLISTED_PROCESS",
+    "description": "Detected {{count}} successful logins for user {{group_key}} within {{window_sec}} seconds.",
     "enabled": true,
-    "type": "match",
-    "event_types": ["process_start"],
-    "source_types": ["process"],
-    "group_by": "process_name",
+    "event_types": [
+      "auth_success",
+      "accepted_login"
+    ],
+    "group_by": "user",
+    "id": "RULE_SUCCESS_LOGIN_USER",
+    "severity": "medium",
+    "source_types": [
+      "auth"
+    ],
     "suppress_sec": 60,
-    "severity": "high",
-    "title": "Blacklisted process started",
-    "description": "Detected blacklisted process: {{group_key}}.",
+    "threshold": 10,
+    "title": "Too many successful logins",
+    "type": "threshold",
+    "window_sec": 120
+  },
+  {
     "conditions": [
       {
         "field": "process_name",
         "op": "in",
-        "values": ["nc", "netcat", "ncat", "socat"]
+        "values": [
+          "nc",
+          "netcat",
+          "ncat",
+          "socat"
+        ]
       }
-    ]
+    ],
+    "description": "Detected blacklisted process: {{group_key}}.",
+    "enabled": true,
+    "event_types": [
+      "process_start"
+    ],
+    "group_by": "process_name",
+    "id": "RULE_BLACKLISTED_PROCESS",
+    "severity": "high",
+    "source_types": [
+      "process"
+    ],
+    "suppress_sec": 60,
+    "title": "Blacklisted process started",
+    "type": "match"
   },
   {
-    "id": "RULE_SENSITIVE_SSH_FILE_CHANGE",
-    "enabled": true,
-    "type": "match",
-    "event_types": ["file_created", "file_modified", "file_deleted"],
-    "source_types": ["file"],
-    "group_by": "path",
-    "suppress_sec": 60,
-    "severity": "high",
-    "title": "Sensitive SSH file changed",
-    "description": "Detected sensitive SSH file activity: {{event_type}} on {{group_key}}.",
     "conditions": [
       {
         "field": "path",
         "op": "contains_any",
-        "values": ["authorized_keys", "known_hosts", "config", "id_rsa", "id_ed25519"]
+        "values": [
+          "authorized_keys",
+          "known_hosts",
+          "config",
+          "id_rsa",
+          "id_ed25519"
+        ]
       }
-    ]
+    ],
+    "description": "Detected sensitive SSH file activity: {{event_type}} on {{group_key}}.",
+    "enabled": true,
+    "event_types": [
+      "file_created",
+      "file_modified",
+      "file_deleted"
+    ],
+    "group_by": "path",
+    "id": "RULE_SENSITIVE_SSH_FILE_CHANGE",
+    "severity": "high",
+    "source_types": [
+      "file"
+    ],
+    "suppress_sec": 60,
+    "title": "Sensitive SSH file changed",
+    "type": "match"
   },
   {
-    "id": "RULE_APPARMOR_DENIED",
-    "enabled": true,
-    "type": "threshold",
-    "event_types": ["system_event"],
-    "source_types": ["syslog"],
-    "group_by": "program",
-    "threshold": 10,
-    "window_sec": 120,
-    "suppress_sec": 60,
-    "severity": "medium",
-    "title": "Repeated AppArmor denied events",
-    "description": "Detected {{count}} AppArmor denied events for program {{group_key}} within {{window_sec}} seconds.",
     "conditions": [
       {
         "field": "raw",
         "op": "contains",
         "value": "apparmor=\"DENIED\""
       }
-    ]
+    ],
+    "description": "Detected {{count}} AppArmor denied events for program {{group_key}} within {{window_sec}} seconds.",
+    "enabled": true,
+    "event_types": [
+      "system_event"
+    ],
+    "group_by": "program",
+    "id": "RULE_APPARMOR_DENIED",
+    "severity": "medium",
+    "source_types": [
+      "syslog"
+    ],
+    "suppress_sec": 60,
+    "threshold": 10,
+    "title": "Repeated AppArmor denied events",
+    "type": "threshold",
+    "window_sec": 120
   },
   {
-    "id": "RULE_KERNEL_ERROR",
-    "enabled": true,
-    "type": "match",
-    "event_types": ["system_event"],
-    "source_types": ["syslog"],
-    "group_by": "program",
-    "suppress_sec": 60,
-    "severity": "medium",
-    "title": "Kernel or system error message",
-    "description": "Detected system error from {{group_key}}.",
     "conditions": [
       {
         "field": "severity",
         "op": "in",
-        "values": ["medium", "high"]
+        "values": [
+          "medium",
+          "high"
+        ]
       }
-    ]
+    ],
+    "description": "Detected system error from {{group_key}}.",
+    "enabled": true,
+    "event_types": [
+      "system_event"
+    ],
+    "group_by": "program",
+    "id": "RULE_KERNEL_ERROR",
+    "severity": "medium",
+    "source_types": [
+      "syslog"
+    ],
+    "suppress_sec": 60,
+    "title": "Kernel or system error message",
+    "type": "match"
+  },
+  {
+    "conditions": [],
+    "description": "UI test detected {{count}} failed logins from IP {{group_key}} within {{window_sec}} seconds.",
+    "enabled": false,
+    "event_types": [
+      "auth_failed"
+    ],
+    "group_by": "src_ip",
+    "id": "RULE_UI_TEST_FAILED_LOGIN_IP",
+    "severity": "high",
+    "source_types": [
+      "auth"
+    ],
+    "suppress_sec": 30,
+    "threshold": 2,
+    "title": "UI test brute force from IP",
+    "type": "threshold",
+    "window_sec": 300
   }
 ]

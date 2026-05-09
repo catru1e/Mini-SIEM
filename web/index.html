@@ -25,6 +25,12 @@
       <div class="sidebar-block">
         <div class="sidebar-title">Controls</div>
         <button id="refreshBtn" class="primary-btn">Refresh now</button>
+        <button id="reloadRulesBtn" class="secondary-btn">Reload rules</button>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="sidebar-title">Rules</div>
+        <p class="sidebar-note">Create, edit, enable, disable and delete detection rules from the dashboard.</p>
       </div>
     </aside>
 
@@ -32,7 +38,7 @@
       <header class="topbar">
         <div>
           <h2>Security Overview</h2>
-          <p class="topbar-subtitle">Live events and alerts from your local SIEM instance</p>
+          <p class="topbar-subtitle">Live events, alerts and detection rules from your local SIEM instance</p>
         </div>
       </header>
 
@@ -48,6 +54,10 @@
         <div class="stat-card">
           <div class="stat-label">High Alerts</div>
           <div id="statHighAlerts" class="stat-value danger">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Rules</div>
+          <div id="statRules" class="stat-value">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Last Update</div>
@@ -103,6 +113,149 @@
             <span id="alertsCount" class="count-badge">0</span>
           </div>
           <div id="alertsList" class="items-list"></div>
+        </div>
+      </section>
+
+      <section class="panel rules-panel">
+        <div class="panel-header">
+          <div>
+            <h3>Detection Rules</h3>
+            <p>Manage JSON-based detection rules without editing files manually</p>
+          </div>
+          <span id="rulesCount" class="count-badge">0</span>
+        </div>
+
+        <div id="ruleMessage" class="rule-message"></div>
+
+        <div class="rules-layout">
+          <div class="rule-form-card">
+            <h4 id="ruleFormTitle">Create rule</h4>
+
+            <div class="rule-grid">
+              <div class="filter-group">
+                <label for="ruleIdInput">Rule ID</label>
+                <input id="ruleIdInput" type="text" placeholder="RULE_FAILED_LOGIN_IP" />
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleEnabledInput">Enabled</label>
+                <label class="checkbox-row">
+                  <input id="ruleEnabledInput" type="checkbox" checked />
+                  <span>Rule is enabled</span>
+                </label>
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleTypeInput">Type</label>
+                <select id="ruleTypeInput">
+                  <option value="threshold">threshold</option>
+                  <option value="match">match</option>
+                </select>
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleSeverityInput">Severity</label>
+                <select id="ruleSeverityInput">
+                  <option value="info">info</option>
+                  <option value="low">low</option>
+                  <option value="medium" selected>medium</option>
+                  <option value="high">high</option>
+                </select>
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleEventTypesInput">Event types</label>
+                <input id="ruleEventTypesInput" type="text" placeholder="auth_failed, system_event" />
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleSourceTypesInput">Source types</label>
+                <input id="ruleSourceTypesInput" type="text" placeholder="auth, syslog, process, file" />
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleGroupByInput">Group by</label>
+                <input id="ruleGroupByInput" type="text" placeholder="src_ip, user, program, path" />
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleThresholdInput">Threshold</label>
+                <input id="ruleThresholdInput" type="number" min="1" value="5" />
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleWindowInput">Window seconds</label>
+                <input id="ruleWindowInput" type="number" min="1" value="300" />
+              </div>
+
+              <div class="filter-group">
+                <label for="ruleSuppressInput">Suppress seconds</label>
+                <input id="ruleSuppressInput" type="number" min="0" value="60" />
+              </div>
+
+              <div class="filter-group wide">
+                <label for="ruleTitleInput">Title</label>
+                <input id="ruleTitleInput" type="text" placeholder="Brute force from IP" />
+              </div>
+
+              <div class="filter-group wide">
+                <label for="ruleDescriptionInput">Description template</label>
+                <textarea id="ruleDescriptionInput" rows="3" placeholder="Detected {{count}} events from {{group_key}} within {{window_sec}} seconds."></textarea>
+              </div>
+            </div>
+
+            <div class="conditions-box">
+              <h4>Conditions</h4>
+
+              <div class="condition-grid">
+                <div class="filter-group">
+                  <label for="conditionFieldInput">Field</label>
+                  <input id="conditionFieldInput" type="text" placeholder="raw, program, severity" />
+                </div>
+
+                <div class="filter-group">
+                  <label for="conditionOpInput">Operator</label>
+                  <select id="conditionOpInput">
+                    <option value="equals">equals</option>
+                    <option value="not_equals">not_equals</option>
+                    <option value="contains">contains</option>
+                    <option value="contains_any">contains_any</option>
+                    <option value="in">in</option>
+                    <option value="starts_with">starts_with</option>
+                    <option value="ends_with">ends_with</option>
+                    <option value="exists">exists</option>
+                  </select>
+                </div>
+
+                <div class="filter-group">
+                  <label for="conditionValueInput">Value</label>
+                  <input id="conditionValueInput" type="text" placeholder="kernel or DENIED" />
+                </div>
+
+                <div class="filter-group">
+                  <label for="conditionValuesInput">Values</label>
+                  <input id="conditionValuesInput" type="text" placeholder="medium, high" />
+                </div>
+              </div>
+
+              <button id="addConditionBtn" class="secondary-btn">Add condition</button>
+              <div id="conditionsList" class="conditions-list"></div>
+            </div>
+
+            <div class="form-actions">
+              <button id="createRuleBtn" class="primary-btn">Create rule</button>
+              <button id="updateRuleBtn" class="primary-btn muted-btn" disabled>Save changes</button>
+              <button id="clearRuleFormBtn" class="secondary-btn">Clear form</button>
+            </div>
+          </div>
+
+          <div class="rules-list-card">
+            <div class="rules-list-header">
+              <h4>Rules from config/rules.json</h4>
+              <button id="loadRulesBtn" class="secondary-btn">Refresh rules</button>
+            </div>
+            <div id="rulesList" class="rules-list"></div>
+          </div>
         </div>
       </section>
     </main>

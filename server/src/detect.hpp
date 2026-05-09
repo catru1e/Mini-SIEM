@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <mutex>
 
 #include "db_sqlite.hpp"
 #include "json.hpp"
@@ -14,6 +15,7 @@ public:
   explicit DetectionEngine(SqliteDb& db, DetectionConfig config);
 
   std::vector<json> process_event(const json& event);
+  bool reload_rules();
 
 private:
   struct RuleCondition {
@@ -45,8 +47,9 @@ private:
   SqliteDb& db_;
   DetectionConfig config_;
   std::vector<DetectionRule> rules_;
+  std::mutex rules_mutex_;
 
-  void load_rules(const std::string& path);
+  bool load_rules(const std::string& path);
   DetectionRule parse_rule(const json& item) const;
   RuleCondition parse_condition(const json& item) const;
 

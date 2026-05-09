@@ -128,19 +128,23 @@ std::string render_template(std::string text,
 
 } //NAMESPACE END
 
-
 DetectionEngine::DetectionEngine(SqliteDb& db, DetectionConfig config)
    : db_(db), config_(std::move(config)) {
-  load_rules("config/rules.json");
+  reload_rules();
 }
 
-void DetectionEngine::load_rules(const std::string& path) {
+bool DetectionEngine::reload_rules() {
+  std::lock_guard<std::mutex> lock(rules_mutex_);
+  return load_rules("config/rules.json");
+}
+
+bool DetectionEngine::load_rules(const std::string& path) {
   rules_.clear();
 
   std::ifstream in(path, std::ios::binary);
   if (!in.is_open()) {
     std::cerr << "[detect] rules file not found: " << path << "\n";
-    return;
+    return false;
   }
 
   try {
@@ -149,7 +153,7 @@ void DetectionEngine::load_rules(const std::string& path) {
 
     if (!root.is_array()) {
       std::cerr << "[detect] rules file must contain JSON array: " << path << "\n";
-      return;
+      return false;
     }
 
     for (const auto& item : root) {
@@ -166,8 +170,10 @@ void DetectionEngine::load_rules(const std::string& path) {
     }
 
     std::cerr << "[detect] loaded rules=" << rules_.size() << " from " << path << "\n";
+    return true;
   } catch (const std::exception& e) {
     std::cerr << "[detect] failed to load rules: " << e.what() << "\n";
+    return false;
   }
 }
 
@@ -244,11 +250,18 @@ std::vector<json> DetectionEngine::process_event(const json& event) {
   const std::string event_type = safe_string(event, "event_type", "");
   const std::string source_type = safe_string(event, "source_type", "");
 
+  std::vector<DetectionRule> rules_snapshot;
+
+  {
+    std::lock_guard<std::mutex> lock(rules_mutex_);
+    rules_snapshot = rules_;
+  }
+
   std::cerr << "[detect] process_event type=" << event_type
             << " source_type=" << source_type
-            << " rules=" << rules_.size() << "\n";
+            << " rules=" << rules_snapshot.size() << "\n";
 
-  for (const auto& rule : rules_) {
+  for (const auto& rule : rules_snapshot) {
     json alert = evaluate_rule(rule, event);
     if (!alert.is_null()) {
       alerts.push_back(std::move(alert));

@@ -131,6 +131,111 @@ static bool read_file(const std::string& path, std::string& out) {
   return true;
 }
 
+static bool read_json_file(const std::string& path, json& out, std::string& err) {
+  try {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+      err = "failed to open file: " + path;
+      return false;
+    }
+
+    file >> out;
+    return true;
+  } catch (const std::exception& e) {
+    err = e.what();
+    return false;
+  }
+}
+
+static bool write_json_file(const std::string& path, const json& data, std::string& err) {
+  try {
+    std::filesystem::path p(path);
+
+    if (p.has_parent_path()) {
+      std::filesystem::create_directories(p.parent_path());
+    }
+
+    const std::string tmp_path = path + ".tmp";
+
+    {
+      std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
+      if (!out.is_open()) {
+        err = "failed to write file: " + tmp_path;
+        return false;
+      }
+
+      out << data.dump(2) << "\n";
+    }
+
+    std::filesystem::rename(tmp_path, path);
+    return true;
+  } catch (const std::exception& e) {
+    err = e.what();
+    return false;
+  }
+}
+
+static bool validate_rule_json(const json& rule, std::string& err) {
+  if (!rule.is_object()) {
+    err = "rule must be a JSON object";
+    return false;
+  }
+
+  if (!rule.contains("id") || !rule["id"].is_string() || rule["id"].get<std::string>().empty()) {
+    err = "rule.id must be a non-empty string";
+    return false;
+  }
+
+  if (rule.contains("enabled") && !rule["enabled"].is_boolean()) {
+    err = "rule.enabled must be boolean";
+    return false;
+  }
+
+  if (rule.contains("type") && !rule["type"].is_string()) {
+    err = "rule.type must be string";
+    return false;
+  }
+
+  if (rule.contains("threshold") && !rule["threshold"].is_number_integer()) {
+    err = "rule.threshold must be integer";
+    return false;
+  }
+
+  if (rule.contains("window_sec") && !rule["window_sec"].is_number_integer()) {
+    err = "rule.window_sec must be integer";
+    return false;
+  }
+
+  if (rule.contains("suppress_sec") && !rule["suppress_sec"].is_number_integer()) {
+    err = "rule.suppress_sec must be integer";
+    return false;
+  }
+
+  return true;
+}
+
+static int find_rule_index_by_id(const json& rules, const std::string& id) {
+  if (!rules.is_array()) return -1;
+
+  for (std::size_t i = 0; i < rules.size(); ++i) {
+    const auto& item = rules[i];
+
+    if (!item.is_object()) continue;
+    if (!item.contains("id") || !item["id"].is_string()) continue;
+
+    if (item["id"].get<std::string>() == id) {
+      return static_cast<int>(i);
+    }
+  }
+
+  return -1;
+}
+
+static void send_json_response(httplib::Response& res, int status, const json& body) {
+  res.status = status;
+  res.set_content(body.dump(), "application/json");
+}
+
 static json make_event_response_item(long long id, const json& original) {
   return json {
     {"id", id},
@@ -307,6 +412,243 @@ int main() {
 	  return false;
 	}
       );
+    });
+    const std::string rules_path = "config/rules.json";
+    std::mutex rules_file_mutex;
+
+    // Rules API
+    srv.Get("/api/rules", [&](const httplib::Request&, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(rules_file_mutex);
+
+      json rules;
+      std::string err;
+
+      if (!read_json_file(rules_path, rules, err)) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", err}
+        });
+        return;
+      }
+
+      if (!rules.is_array()) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", "rules file must contain JSON array"}
+        });
+        return;
+      }
+
+      send_json_response(res, 200, {
+        {"status", "ok"},
+        {"count", rules.size()},
+        {"rules", rules}
+      });
+    });
+
+    srv.Post("/api/rules", [&](const httplib::Request& req, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(rules_file_mutex);
+
+      try {
+        json new_rule = json::parse(req.body);
+
+        std::string err;
+        if (!validate_rule_json(new_rule, err)) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        json rules;
+        if (!read_json_file(rules_path, rules, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!rules.is_array()) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", "rules file must contain JSON array"}
+          });
+          return;
+        }
+
+        const std::string id = new_rule["id"].get<std::string>();
+
+        if (find_rule_index_by_id(rules, id) >= 0) {
+          send_json_response(res, 409, {
+            {"status", "error"},
+            {"message", "rule already exists"},
+            {"id", id}
+          });
+          return;
+        }
+
+        rules.push_back(new_rule);
+
+        if (!write_json_file(rules_path, rules, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        const bool reloaded = detector.reload_rules();
+
+        send_json_response(res, 201, {
+          {"status", "ok"},
+          {"action", "created"},
+          {"id", id},
+          {"rules_reloaded", reloaded},
+          {"rule", new_rule}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Put(R"(/api/rules/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(rules_file_mutex);
+
+      try {
+        const std::string id = req.matches[1].str();
+
+        json updated_rule = json::parse(req.body);
+        updated_rule["id"] = id;
+
+        std::string err;
+        if (!validate_rule_json(updated_rule, err)) {
+          send_json_response(res, 400, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        json rules;
+        if (!read_json_file(rules_path, rules, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!rules.is_array()) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", "rules file must contain JSON array"}
+          });
+          return;
+        }
+
+        const int index = find_rule_index_by_id(rules, id);
+        if (index < 0) {
+          send_json_response(res, 404, {
+            {"status", "error"},
+            {"message", "rule not found"},
+            {"id", id}
+          });
+          return;
+        }
+
+        rules[static_cast<std::size_t>(index)] = updated_rule;
+
+        if (!write_json_file(rules_path, rules, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        const bool reloaded = detector.reload_rules();
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "updated"},
+          {"id", id},
+          {"rules_reloaded", reloaded},
+          {"rule", updated_rule}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
+    });
+
+    srv.Delete(R"(/api/rules/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(rules_file_mutex);
+
+      try {
+        const std::string id = req.matches[1].str();
+
+        json rules;
+        std::string err;
+
+        if (!read_json_file(rules_path, rules, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        if (!rules.is_array()) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", "rules file must contain JSON array"}
+          });
+          return;
+        }
+
+        const int index = find_rule_index_by_id(rules, id);
+        if (index < 0) {
+          send_json_response(res, 404, {
+            {"status", "error"},
+            {"message", "rule not found"},
+            {"id", id}
+          });
+          return;
+        }
+
+        json removed_rule = rules[static_cast<std::size_t>(index)];
+        rules.erase(rules.begin() + index);
+
+        if (!write_json_file(rules_path, rules, err)) {
+          send_json_response(res, 500, {
+            {"status", "error"},
+            {"message", err}
+          });
+          return;
+        }
+
+        const bool reloaded = detector.reload_rules();
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "deleted"},
+          {"id", id},
+          {"rules_reloaded", reloaded},
+          {"rule", removed_rule}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {
+          {"status", "error"},
+          {"message", e.what()}
+        });
+      }
     });
 
     // Ingest endpoint
