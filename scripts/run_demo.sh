@@ -140,7 +140,8 @@ start_server() {
 start_agent() {
   echo -e "${BLUE}[demo] starting agent with sudo...${RESET}"
   : > "$AGENT_LOG"
-  sudo ./dist/mini_siem_agent >> "$AGENT_LOG" 2>&1 &
+  : > logs/agent_stdout.log
+  sudo ./dist/mini_siem_agent >> logs/agent_stdout.log 2>&1 &
   echo $! > "$AGENT_PID_FILE"
 }
 

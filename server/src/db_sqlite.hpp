@@ -5,11 +5,13 @@
 
 struct DbEventRow {
   long long id = 0;
+  std::string event_id;
   std::string ts;
   std::string received_at;
   std::string host;
   std::string event_type;
   std::string source;
+  std::string source_type;
   std::string severity;
   std::string json;
 };
@@ -32,14 +34,18 @@ public:
   void init();
 
   // zapishem shtuchki
-  void insert_event(const std::string& ts,
+  void insert_event(const std::string& event_id,
+                    const std::string& ts,
+                    const std::string& received_at,
                     const std::string& event_type,
                     const std::string& source,
+                    const std::string& source_type,
                     const std::string& json);
 
   //prochitat poslednie N shtuki (id DESC)
   std::vector<DbEventRow> get_last_events(int limit);
-  std::vector<DbAlertRow> get_last_alerts(int limit); //ATTENTION IT IS ALERTS 
+  std::vector<DbAlertRow> get_last_alerts(int limit); //ATTENTION IT IS ALERTS
+
   std::vector<std::string> get_recent_privilege_escalation_commands_by_user_since(
     const std::string& user,
     const std::string& since_ts,
@@ -50,6 +56,7 @@ public:
   long long count_auth_invalid_user_by_src_ip_since(const std::string& src_ip, const std::string& since_ts);
   long long count_privilege_escalation_by_user_since(const std::string& user, const std::string& since_ts);
   long long count_auth_success_by_user_since(const std::string& user, const std::string& since_ts);
+
   bool has_recent_alert_for_rule_and_user_since(
     const std::string& rule_name,
     const std::string& user,

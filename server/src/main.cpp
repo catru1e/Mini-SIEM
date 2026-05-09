@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <deque>
 #include <memory>
+#include <random>
 
 #include "httplib.h"
 #include "json.hpp"
@@ -47,6 +48,79 @@ static std::string safe_string(const json& j, const char* key, const std::string
   return j[key].dump();
 }
 
+static std::string lower_copy(std::string s) {
+  for (char& c : s) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return s;
+}
+
+static std::string generate_event_id() {
+  static const char* hex = "0123456789abcdef";
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<int> dist(0, 15);
+  std::uniform_int_distribution<int> variant_dist(8, 11);
+
+  std::string id = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+
+  for (char& c : id) {
+    if (c == 'x') {
+      c = hex[dist(gen)];
+    } else if (c == 'y') {
+      c = hex[variant_dist(gen)];
+    }
+  }
+
+  return id;
+}
+
+static bool is_auth_event_type(const std::string& event_type) {
+  const std::string t = lower_copy(event_type);
+
+  return t == "failed_login" ||
+         t == "accepted_login" ||
+         t == "invalid_user" ||
+         t == "privilege_escalation" ||
+         t == "session_open" ||
+         t == "session_close" ||
+         t == "auth_failed" ||
+         t == "auth_success" ||
+         t == "auth_invalid_user";
+}
+
+static std::string detect_source_type(const json& event) {
+  const std::string source = lower_copy(safe_string(event, "source", ""));
+  const std::string event_type = lower_copy(safe_string(event, "event_type", ""));
+
+  if (source == "proc" || event_type == "process_start") {
+    return "process";
+  }
+
+  if (source.rfind("inotify", 0) == 0 ||
+      event_type.rfind("file_", 0) == 0 ||
+      event.contains("watched_path")) {
+    return "file";
+  }
+
+  if (source.find("auth") != std::string::npos ||
+      source.find("demo_auth") != std::string::npos ||
+      is_auth_event_type(event_type)) {
+    return "auth";
+  }
+
+  if (source.find("syslog") != std::string::npos ||
+      source.find("kern") != std::string::npos ||
+      event_type == "system_event") {
+    return "syslog";
+  }
+
+  return "syslog";
+}
+
 static bool read_file(const std::string& path, std::string& out) {
   std::ifstream file(path, std::ios::binary);
   if (!file) return false;
@@ -60,11 +134,13 @@ static bool read_file(const std::string& path, std::string& out) {
 static json make_event_response_item(long long id, const json& original) {
   return json {
     {"id", id},
+    {"event_id", safe_string(original, "event_id", "")},
     {"ts", safe_string(original, "ts", "")},
-    {"received_at", now_iso_utc()},
+    {"received_at", safe_string(original, "received_at", "")},
     {"host", safe_string(original, "host", "unknown")},
     {"event_type", safe_string(original, "event_type", "unknown")},
     {"source", safe_string(original, "source", "unknown")},
+    {"source_type", safe_string(original, "source_type", "syslog")},
     {"severity", safe_string(original, "severity", "info")},
     {"event", original}
   };
@@ -88,7 +164,7 @@ static std::string sse_message(const std::string& event_name, const json& payloa
 }
 
 static int clamp_limit(int requested, int def, int max_value) {
-  if (requested <- 0) return def;
+  if (requested <= 0) return def;
   if (requested > max_value) return max_value;
   return requested;
 }
@@ -238,19 +314,43 @@ int main() {
       try {
         auto j = json::parse(req.body);
 
+        if (!j.is_object()) {
+          throw std::runtime_error("ingest body must be a JSON object");
+        }
+
+        const std::string received_at = now_iso_utc();
+
         // Заполняем минимальные поля, если агент не прислал
-        std::string ts = safe_string(j, "ts", now_iso_utc());
+        std::string ts = safe_string(j, "ts", received_at);
         std::string event_type = safe_string(j, "event_type", "unknown");
         std::string source = safe_string(j, "source", "unknown");
+        std::string event_id = safe_string(j, "event_id", "");
 
 	if (!j.contains("ts")) j["ts"] = ts;
 	if (!j.contains("event_type")) j["event_type"] = event_type;
 	if (!j.contains("source")) j["source"] = source;
 
+        if (event_id.empty()) {
+          event_id = generate_event_id();
+        }
+
+        j["event_id"] = event_id;
+        j["received_at"] = received_at;
+
+        std::string source_type = safe_string(j, "source_type", "");
+        if (source_type.empty()) {
+          source_type = detect_source_type(j);
+        }
+        j["source_type"] = source_type;
+
+        ts = safe_string(j, "ts", received_at);
+        event_type = safe_string(j, "event_type", "unknown");
+        source = safe_string(j, "source", "unknown");
+
         // Канонизируем json (храним строкой)
         std::string body = j.dump();
 
-        db.insert_event(ts, event_type, source, body);
+        db.insert_event(event_id, ts, received_at, event_type, source, source_type, body);
 
 	broadcast_sse("event", make_event_response_item(0, j));
 
@@ -286,7 +386,13 @@ int main() {
 	  std::cerr << "[detect][ERR] unknown detection error\n";
 	}
 
-        json out = {{"status", "ok"}};
+        json out = {
+          {"status", "ok"},
+          {"event_id", event_id},
+          {"received_at", received_at},
+          {"source_type", source_type}
+        };
+
         res.set_content(out.dump(), "application/json");
         res.status = 200;
       } catch (const std::exception& e) {
@@ -323,11 +429,13 @@ int main() {
 
         json item = {
           {"id", r.id},
+          {"event_id", r.event_id},
           {"ts", r.ts},
 	  {"received_at", r.received_at},
 	  {"host", r.host},
           {"event_type", r.event_type},
           {"source", r.source},
+          {"source_type", r.source_type},
 	  {"severity", r.severity},
           {"event", original}
         };
