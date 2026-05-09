@@ -46,6 +46,15 @@ public:
   std::vector<DbEventRow> get_last_events(int limit);
   std::vector<DbAlertRow> get_last_alerts(int limit); //ATTENTION IT IS ALERTS
 
+  long long count_events_by_field_since(const std::string& event_type,
+                                        const std::string& field_name,
+                                        const std::string& field_value,
+                                        const std::string& since_ts);
+
+  bool has_recent_alert_for_rule_and_group_since(const std::string& rule_id,
+                                                 const std::string& group_key,
+                                                 const std::string& since_ts);
+
   std::vector<std::string> get_recent_privilege_escalation_commands_by_user_since(
     const std::string& user,
     const std::string& since_ts,

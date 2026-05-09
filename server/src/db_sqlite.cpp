@@ -622,3 +622,102 @@ std::vector<std::string> SqliteDb::get_recent_privilege_escalation_commands_by_u
   sqlite3_close(db);
   return commands;
 }
+
+long long SqliteDb::count_events_by_field_since(const std::string& event_type,
+                                                const std::string& field_name,
+                                                const std::string& field_value,
+                                                const std::string& since_ts) {
+  if (event_type.empty()) return 0;
+  if (field_name.empty()) return 0;
+  if (field_value.empty()) return 0;
+
+  for (char c : field_name) {
+    const bool ok =
+      (c >= 'a' && c <= 'z') ||
+      (c >= 'A' && c <= 'Z') ||
+      (c >= '0' && c <= '9') ||
+      c == '_';
+
+    if (!ok) {
+      return 0;
+    }
+  }
+
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  sqlite3_busy_timeout(db, 5000);
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM events "
+    "WHERE event_type = ? "
+    "AND ts >= ? "
+    "AND json_extract(json, ?) = ?;";
+
+  const std::string json_path = "$." + field_name;
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, event_type.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, json_path.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 4, field_value.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(count_events_by_field_since)");
+  }
+
+  long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count;
+}
+
+bool SqliteDb::has_recent_alert_for_rule_and_group_since(const std::string& rule_id,
+                                                         const std::string& group_key,
+                                                         const std::string& since_ts) {
+  if (rule_id.empty()) return false;
+  if (group_key.empty()) return false;
+
+  sqlite3* db = nullptr;
+  int rc = sqlite3_open(db_path_.c_str(), &db);
+  throw_sqlite(rc, db, "sqlite3_open");
+
+  sqlite3_busy_timeout(db, 5000);
+
+  const char* sql =
+    "SELECT COUNT(*) "
+    "FROM alerts "
+    "WHERE ts >= ? "
+    "AND json_extract(json, '$.rule_id') = ? "
+    "AND json_extract(json, '$.group_key') = ?;";
+
+  sqlite3_stmt* stmt = nullptr;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+
+  sqlite3_bind_text(stmt, 1, since_ts.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, rule_id.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, group_key.c_str(), -1, SQLITE_TRANSIENT);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    throw_sqlite(rc, db, "sqlite3_step(has_recent_alert_for_rule_and_group_since)");
+  }
+
+  const long long count = sqlite3_column_int64(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return count > 0;
+}
