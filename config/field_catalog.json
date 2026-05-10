@@ -1,0 +1,327 @@
+{
+  "version": 1,
+  "fields": [
+    {
+      "group": "Event",
+      "fields": [
+        "event.id",
+        "event.code",
+        "event.name",
+        "event.type",
+        "event.category",
+        "event.action",
+        "event.outcome",
+        "event.reason",
+        "event.severity",
+        "event.priority",
+        "event.kind",
+        "event.provider",
+        "event.original",
+        "event.message",
+        "event.description",
+        "event.error_code",
+        "event.error_message",
+        "event.risk_score"
+      ]
+    },
+    {
+      "group": "Receiver / Collector",
+      "fields": [
+        "receiver.id",
+        "receiver.name",
+        "receiver.type",
+        "receiver.path",
+        "receiver.source_type",
+        "receiver.policy_group",
+        "collector.id",
+        "collector.name",
+        "collector.version",
+        "agent.id",
+        "agent.name",
+        "agent.hostname",
+        "agent.version"
+      ]
+    },
+    {
+      "group": "Policy / Rule",
+      "fields": [
+        "policy.id",
+        "policy.name",
+        "policy.group.id",
+        "policy.group.name",
+        "rule.id",
+        "rule.name",
+        "rule.category",
+        "rule.description",
+        "rule.severity",
+        "rule.risk_score"
+      ]
+    },
+    {
+      "group": "Host",
+      "fields": [
+        "host.id",
+        "host.name",
+        "host.hostname",
+        "host.domain",
+        "host.fqdn",
+        "host.ip",
+        "host.mac",
+        "host.architecture",
+        "host.os.name",
+        "host.os.family",
+        "host.os.type",
+        "host.os.platform",
+        "host.os.version",
+        "host.os.kernel"
+      ]
+    },
+    {
+      "group": "User / Account",
+      "fields": [
+        "user.id",
+        "user.name",
+        "user.full_name",
+        "user.email",
+        "user.domain",
+        "user.type",
+        "user.roles",
+        "user.group.id",
+        "user.group.name",
+        "user.effective.id",
+        "user.effective.name",
+        "source.user.id",
+        "source.user.name",
+        "destination.user.id",
+        "destination.user.name",
+        "actor.id",
+        "actor.name",
+        "actor.type",
+        "account.id",
+        "account.name",
+        "account.domain",
+        "account.type",
+        "account.status"
+      ]
+    },
+    {
+      "group": "Authentication",
+      "fields": [
+        "auth.method",
+        "auth.type",
+        "auth.mechanism",
+        "auth.protocol",
+        "auth.provider",
+        "auth.realm",
+        "auth.result",
+        "auth.failure_reason",
+        "auth.session.id",
+        "auth.session.type",
+        "auth.mfa.used",
+        "auth.mfa.method",
+        "auth.privilege.level",
+        "auth.privilege.escalated",
+        "auth.sudo.command",
+        "auth.sudo.user",
+        "auth.sudo.tty",
+        "auth.sudo.pwd",
+        "auth.sudo.run_as"
+      ]
+    },
+    {
+      "group": "Source",
+      "fields": [
+        "source.ip",
+        "source.port",
+        "source.address",
+        "source.domain",
+        "source.hostname",
+        "source.mac",
+        "source.nat.ip",
+        "source.nat.port",
+        "source.bytes",
+        "source.packets",
+        "source.geo.country_name",
+        "source.geo.city_name"
+      ]
+    },
+    {
+      "group": "Destination",
+      "fields": [
+        "destination.ip",
+        "destination.port",
+        "destination.address",
+        "destination.domain",
+        "destination.hostname",
+        "destination.mac",
+        "destination.nat.ip",
+        "destination.nat.port",
+        "destination.bytes",
+        "destination.packets",
+        "destination.geo.country_name",
+        "destination.geo.city_name"
+      ]
+    },
+    {
+      "group": "Network",
+      "fields": [
+        "network.type",
+        "network.transport",
+        "network.protocol",
+        "network.application",
+        "network.direction",
+        "network.bytes",
+        "network.packets",
+        "network.tcp.flags",
+        "network.icmp.type",
+        "network.icmp.code"
+      ]
+    },
+    {
+      "group": "Process",
+      "fields": [
+        "process.id",
+        "process.pid",
+        "process.ppid",
+        "process.name",
+        "process.executable",
+        "process.path",
+        "process.args",
+        "process.command_line",
+        "process.working_directory",
+        "process.parent.pid",
+        "process.parent.name",
+        "process.parent.command_line",
+        "process.owner.name",
+        "process.hash.md5",
+        "process.hash.sha1",
+        "process.hash.sha256"
+      ]
+    },
+    {
+      "group": "File",
+      "fields": [
+        "file.id",
+        "file.name",
+        "file.path",
+        "file.directory",
+        "file.extension",
+        "file.type",
+        "file.size",
+        "file.owner",
+        "file.group",
+        "file.created",
+        "file.accessed",
+        "file.modified",
+        "file.changed",
+        "file.target_path",
+        "file.hash.md5",
+        "file.hash.sha1",
+        "file.hash.sha256"
+      ]
+    },
+    {
+      "group": "URL / HTTP",
+      "fields": [
+        "url.original",
+        "url.scheme",
+        "url.domain",
+        "url.port",
+        "url.path",
+        "url.query",
+        "http.version",
+        "http.request.method",
+        "http.request.referrer",
+        "http.response.status_code",
+        "http.user_agent.original"
+      ]
+    },
+    {
+      "group": "DNS",
+      "fields": [
+        "dns.question.name",
+        "dns.question.type",
+        "dns.answers.name",
+        "dns.answers.type",
+        "dns.answers.data",
+        "dns.response_code",
+        "dns.resolved_ip"
+      ]
+    },
+    {
+      "group": "Linux / Syslog",
+      "fields": [
+        "syslog.facility",
+        "syslog.priority",
+        "syslog.severity",
+        "syslog.identifier",
+        "syslog.pid",
+        "syslog.timestamp",
+        "syslog.hostname",
+        "syslog.message",
+        "linux.audit.type",
+        "linux.audit.uid",
+        "linux.audit.auid",
+        "linux.audit.op",
+        "linux.audit.res",
+        "linux.kernel.subsystem",
+        "linux.kernel.device",
+        "linux.kernel.driver",
+        "linux.kernel.error_code",
+        "linux.kernel.message",
+        "pam.service",
+        "pam.session.action",
+        "pam.module",
+        "pam.result"
+      ]
+    },
+    {
+      "group": "Threat / Malware",
+      "fields": [
+        "threat.id",
+        "threat.name",
+        "threat.type",
+        "threat.category",
+        "threat.family",
+        "threat.technique.id",
+        "threat.technique.name",
+        "threat.tactic.id",
+        "threat.tactic.name",
+        "malware.name",
+        "malware.family",
+        "malware.type",
+        "malware.action",
+        "malware.result"
+      ]
+    },
+    {
+      "group": "Custom",
+      "fields": [
+        "custom.string1",
+        "custom.string2",
+        "custom.string3",
+        "custom.string4",
+        "custom.string5",
+        "custom.number1",
+        "custom.number2",
+        "custom.number3",
+        "custom.boolean1",
+        "custom.boolean2",
+        "custom.date1",
+        "custom.date2",
+        "custom.ip1",
+        "custom.ip2",
+        "custom.user1",
+        "custom.user2",
+        "custom.host1",
+        "custom.host2",
+        "custom.path1",
+        "custom.path2",
+        "custom.raw1",
+        "custom.raw2",
+        "labels",
+        "tags"
+      ]
+    }
+  ]
+}

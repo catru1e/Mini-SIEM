@@ -56,11 +56,139 @@ std::string safe_string(const json& j, const char* key, const std::string& def =
   return j[key].dump();
 }
 
-std::string safe_field_string(const json& j, const std::string& key, const std::string& def = "") {
-  if (key.empty()) return def;
-  if (!j.contains(key) || j[key].is_null()) return def;
-  if (j[key].is_string()) return j[key].get<std::string>();
-  return j[key].dump();
+std::string json_value_to_string(const json& value) {
+  if (value.is_null()) return "";
+  if (value.is_string()) return value.get<std::string>();
+  if (value.is_boolean()) return value.get<bool>() ? "true" : "false";
+  if (value.is_number_integer()) return std::to_string(value.get<long long>());
+  if (value.is_number_unsigned()) return std::to_string(value.get<unsigned long long>());
+  if (value.is_number_float()) return std::to_string(value.get<double>());
+  return value.dump();
+}
+
+bool get_nested_dot_field(const json& j, const std::string& field, json& out) {
+  const json* current = &j;
+  std::size_t start = 0;
+
+  while (start < field.size()) {
+    std::size_t dot = field.find('.', start);
+    std::string part = field.substr(start, dot == std::string::npos ? std::string::npos : dot - start);
+
+    if (!current->is_object() || !current->contains(part)) {
+      return false;
+    }
+
+    current = &((*current)[part]);
+
+    if (dot == std::string::npos) {
+      out = *current;
+      return true;
+    }
+
+    start = dot + 1;
+  }
+
+  return false;
+}
+
+std::string alias_for_field(const std::string& field) {
+  if (field == "source.ip") return "src_ip";
+  if (field == "client.ip") return "src_ip";
+  if (field == "observer.ip") return "src_ip";
+
+  if (field == "source.port") return "src_port";
+  if (field == "client.port") return "src_port";
+
+  if (field == "destination.ip") return "dst_ip";
+  if (field == "server.ip") return "dst_ip";
+
+  if (field == "destination.port") return "dst_port";
+  if (field == "server.port") return "dst_port";
+
+  if (field == "user.name") return "user";
+  if (field == "source.user.name") return "user";
+  if (field == "destination.user.name") return "user";
+  if (field == "account.name") return "user";
+  if (field == "actor.name") return "user";
+
+  if (field == "process.name") return "process_name";
+  if (field == "process.executable") return "process_name";
+  if (field == "syslog.identifier") return "program";
+  if (field == "program") return "program";
+
+  if (field == "process.pid") return "pid";
+  if (field == "syslog.pid") return "pid";
+
+  if (field == "process.command_line") return "command";
+  if (field == "auth.sudo.command") return "command";
+
+  if (field == "file.path") return "path";
+  if (field == "file.target_path") return "path";
+  if (field == "registry.path") return "path";
+
+  if (field == "network.protocol") return "protocol";
+  if (field == "auth.protocol") return "protocol";
+
+  if (field == "event.name") return "event_name";
+  if (field == "event.code") return "event_code";
+  if (field == "event.type") return "event_type";
+  if (field == "event.category") return "event_category";
+  if (field == "event.action") return "event_action";
+  if (field == "event.outcome") return "event_outcome";
+  if (field == "event.severity") return "severity";
+
+  if (field == "host.name") return "host";
+  if (field == "host.hostname") return "host";
+
+  if (field == "service.name") return "service";
+  if (field == "pam.service") return "service";
+
+  if (field == "linux.kernel.error_code") return "error_code";
+  if (field == "event.error_code") return "error_code";
+
+  if (field == "url.original") return "url";
+  if (field == "dns.question.name") return "domain";
+
+  if (field == "threat.name") return "threat_name";
+  if (field == "malware.name") return "threat_name";
+
+  return "";
+}
+
+std::string safe_field_string(const json& j, const std::string& field, const std::string& def = "") {
+  if (field.empty()) return def;
+
+  // 1. Direct top-level key.
+  // Works for "src_ip" and also flat keys like "source.ip".
+  if (j.contains(field) && !j[field].is_null()) {
+    return json_value_to_string(j[field]);
+  }
+
+  // 2. Enterprise mapped fields object:
+  // "fields": { "source.ip": "1.2.3.4" }
+  if (j.contains("fields") && j["fields"].is_object()) {
+    const auto& fields = j["fields"];
+
+    if (fields.contains(field) && !fields[field].is_null()) {
+      return json_value_to_string(fields[field]);
+    }
+  }
+
+  // 3. Alias fallback:
+  // source.ip -> src_ip, user.name -> user, etc.
+  const std::string alias = alias_for_field(field);
+  if (!alias.empty() && j.contains(alias) && !j[alias].is_null()) {
+    return json_value_to_string(j[alias]);
+  }
+
+  // 4. Nested object fallback:
+  // source.ip -> { "source": { "ip": "..." } }
+  json nested;
+  if (get_nested_dot_field(j, field, nested)) {
+    return json_value_to_string(nested);
+  }
+
+  return def;
 }
 
 std::string lower_copy(std::string s) {
@@ -311,7 +439,7 @@ bool DetectionEngine::condition_matches(const RuleCondition& condition, const js
   const std::string op = lower_copy(condition.op);
 
   if (op == "exists") {
-    return event.contains(condition.field) && !event[condition.field].is_null();
+    return !field_value.empty();
   }
 
   if (op == "equals") {
@@ -471,13 +599,34 @@ json DetectionEngine::make_alert(const DetectionRule& rule,
     {"host", safe_string(event, "host", "")}
   };
 
+  if (event.contains("fields")) alert["fields"] = event["fields"];
+  if (event.contains("extracted")) alert["extracted"] = event["extracted"];
+
+  if (event.contains("parser_status")) alert["parser_status"] = event["parser_status"];
+  if (event.contains("parser_rule_id")) alert["parser_rule_id"] = event["parser_rule_id"];
+  if (event.contains("parser_rule_name")) alert["parser_rule_name"] = event["parser_rule_name"];
+  if (event.contains("policy_group_id")) alert["policy_group_id"] = event["policy_group_id"];
+  if (event.contains("receiver_id")) alert["receiver_id"] = event["receiver_id"];
+  if (event.contains("receiver_name")) alert["receiver_name"] = event["receiver_name"];
+
   if (event.contains("src_ip")) alert["src_ip"] = event["src_ip"];
+  if (event.contains("dst_ip")) alert["dst_ip"] = event["dst_ip"];
+  if (event.contains("src_port")) alert["src_port"] = event["src_port"];
+  if (event.contains("dst_port")) alert["dst_port"] = event["dst_port"];
+
   if (event.contains("user")) alert["user"] = event["user"];
   if (event.contains("process_name")) alert["process_name"] = event["process_name"];
+  if (event.contains("command")) alert["command"] = event["command"];
   if (event.contains("cmdline")) alert["cmdline"] = event["cmdline"];
   if (event.contains("path")) alert["path"] = event["path"];
   if (event.contains("program")) alert["program"] = event["program"];
+  if (event.contains("service")) alert["service"] = event["service"];
+  if (event.contains("protocol")) alert["protocol"] = event["protocol"];
+  if (event.contains("error_code")) alert["error_code"] = event["error_code"];
+
   if (event.contains("raw")) alert["raw"] = event["raw"];
+
+  return alert;
 
   return alert;
 }

@@ -1,0 +1,20 @@
+[
+  {
+    "id": "pg_linux_auth",
+    "name": "Linux Authentication",
+    "description": "SSH, sudo, login and session events",
+    "enabled": true
+  },
+  {
+    "id": "pg_linux_system",
+    "name": "Linux System",
+    "description": "Generic syslog events",
+    "enabled": true
+  },
+  {
+    "id": "pg_linux_kernel",
+    "name": "Linux Kernel",
+    "description": "Kernel messages and hardware/system events",
+    "enabled": true
+  }
+]

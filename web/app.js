@@ -10,6 +10,10 @@ const refreshBtn = $("refreshBtn");
 const autoRefreshBtn = $("autoRefreshBtn");
 const themeToggleBtn = $("themeToggleBtn");
 const loginThemeToggleBtn = $("loginThemeToggleBtn");
+
+const sidebarToggleBtn = $("sidebarToggleBtn");
+const sideBrandMark = $("sideBrandMark");
+
 const clearOpenBtn = $("clearOpenBtn");
 const limitInput = $("limitInput");
 
@@ -105,6 +109,109 @@ const ruleJsonPreview = $("ruleJsonPreview");
 const ruleValidationBox = $("ruleValidationBox");
 const validateRuleBtn = $("validateRuleBtn");
 const copyRuleJsonBtn = $("copyRuleJsonBtn");
+
+const receiversCount = $("receiversCount");
+const receiverMessage = $("receiverMessage");
+const newReceiverBtn = $("newReceiverBtn");
+const receiversList = $("receiversList");
+
+const deleteSelectedReceiverBtn = $("deleteSelectedReceiverBtn");
+const openSelectedReceiverSettingsBtn = $("openSelectedReceiverSettingsBtn");
+const receiverTreeSearchInput = $("receiverTreeSearchInput");
+
+const receiverEmptyState = $("receiverEmptyState");
+const receiverDetailPanel = $("receiverDetailPanel");
+const receiverDetailTitle = $("receiverDetailTitle");
+const receiverDetailSubtitle = $("receiverDetailSubtitle");
+const openReceiverSettingsInlineBtn = $("openReceiverSettingsInlineBtn");
+
+const receiverDashboardStandard = $("receiverDashboardStandard");
+const receiverDashboardCustom = $("receiverDashboardCustom");
+const receiverDashboardParsers = $("receiverDashboardParsers");
+
+const receiverKpiEvents = $("receiverKpiEvents");
+const receiverKpiUnknown = $("receiverKpiUnknown");
+const receiverKpiParsed = $("receiverKpiParsed");
+const receiverKpiParserRules = $("receiverKpiParserRules");
+
+const receiverEventTypesWidget = $("receiverEventTypesWidget");
+const receiverParserStatusWidget = $("receiverParserStatusWidget");
+const receiverRecentEvents = $("receiverRecentEvents");
+
+const receiverCustomDashboardsList = $("receiverCustomDashboardsList");
+const saveReceiverDashboardsBtn = $("saveReceiverDashboardsBtn");
+
+const receiverParserStatusFilterInput = $("receiverParserStatusFilterInput");
+const receiverKqlFilterInput = $("receiverKqlFilterInput");
+const clearReceiverFiltersBtn = $("clearReceiverFiltersBtn");
+
+const receiverSettingsPanel = $("receiverSettingsPanel");
+const receiverSettingsTitle = $("receiverSettingsTitle");
+const receiverSettingsSubtitle = $("receiverSettingsSubtitle");
+const closeReceiverSettingsBtn = $("closeReceiverSettingsBtn");
+
+const receiverIdInput = $("receiverIdInput");
+const receiverEnabledInput = $("receiverEnabledInput");
+const receiverNameInput = $("receiverNameInput");
+const receiverTypeInput = $("receiverTypeInput");
+
+const receiverRoleInput = $("receiverRoleInput");
+const receiverParentInput = $("receiverParentInput");
+
+const receiverPathInput = $("receiverPathInput");
+const receiverFilePatternInput = $("receiverFilePatternInput");
+const receiverRecursiveInput = $("receiverRecursiveInput");
+const receiverSourceTypeInput = $("receiverSourceTypeInput");
+const receiverInitialPositionInput = $("receiverInitialPositionInput");
+const receiverPolicyGroupsList = $("receiverPolicyGroupsList");
+
+const saveReceiverBtn = $("saveReceiverBtn");
+const deleteReceiverBtn = $("deleteReceiverBtn");
+
+const receiverParserRulesList = $("receiverParserRulesList");
+
+const newParserRuleFromSettingsBtn = $("newParserRuleFromSettingsBtn");
+const deleteSelectedParserRuleBtn = $("deleteSelectedParserRuleBtn");
+const editSelectedParserRuleBtn = $("editSelectedParserRuleBtn");
+
+const toggleSelectedParserRuleBtn = $("toggleSelectedParserRuleBtn");
+
+const parserRuleMessage = receiverMessage;
+const parserRuleFormTitle = $("parserRuleFormTitle");
+const parserEditorModePill = $("parserEditorModePill");
+
+const parserRuleIdInput = $("parserRuleIdInput");
+const parserRuleEnabledInput = $("parserRuleEnabledInput");
+const parserRuleNameInput = $("parserRuleNameInput");
+const parserPolicyGroupInput = $("parserPolicyGroupInput");
+const parserMatchTypeInput = $("parserMatchTypeInput");
+
+const parserRawSampleInput = $("parserRawSampleInput");
+const parserPatternInput = $("parserPatternInput");
+const parserFieldOrderInput = $("parserFieldOrderInput");
+
+const parserConstantEventCodeInput = $("parserConstantEventCodeInput");
+const parserConstantEventNameInput = $("parserConstantEventNameInput");
+const parserConstantEventTypeInput = $("parserConstantEventTypeInput");
+const parserConstantEventCategoryInput = $("parserConstantEventCategoryInput");
+const parserConstantEventActionInput = $("parserConstantEventActionInput");
+const parserConstantEventOutcomeInput = $("parserConstantEventOutcomeInput");
+const parserConstantSeverityInput = $("parserConstantSeverityInput");
+const parserConstantVendorInput = $("parserConstantVendorInput");
+const parserConstantProductInput = $("parserConstantProductInput");
+
+const testParserRuleBtn = $("testParserRuleBtn");
+const copyParserRuleJsonBtn = $("copyParserRuleJsonBtn");
+const clearParserRuleFormBtn = $("clearParserRuleFormBtn");
+
+const parserExtractedPreview = $("parserExtractedPreview");
+const parserMappingRows = $("parserMappingRows");
+const parserReceiversList = $("parserReceiversList");
+
+const createParserRuleBtn = $("createParserRuleBtn");
+const updateParserRuleBtn = $("updateParserRuleBtn");
+
+const parserRuleJsonPreview = $("parserRuleJsonPreview");
 
 const dashboardOverview = $("dashboardOverview");
 const dashboardAuth = $("dashboardAuth");
@@ -1372,12 +1479,38 @@ let stats = {};
 let allEvents = [];
 let allAlerts = [];
 let allRules = [];
+
+let allReceivers = [];
+let allPolicyGroups = [];
+let allParserRules = [];
+let fieldCatalog = [];
+
+let selectedReceiverId = "";
+let editingReceiverId = "";
+let currentReceiverSettingsTab = "config";
+
+let currentReceiverDashboardTab = "standard";
+let currentReceiverParserStatusFilter = "";
+let currentReceiverKqlFilter = "";
+let receiverTreeSearch = "";
+
+let receiverTreeExpanded = new Set(
+  JSON.parse(localStorage.getItem("mini_siem_receiver_tree_expanded") || "[]")
+);
+
+let currentParserExtracted = {};
+let currentParserMapping = {};
+let editingParserRuleId = "";
+let selectedParserRuleId = "";
+
 let currentConditions = [];
 let editingRuleId = "";
 
 let autoRefreshEnabled = false;
 let autoRefreshTimer = null;
 let currentTheme = localStorage.getItem("mini_siem_theme") || "horror";
+
+let sidebarCollapsed = localStorage.getItem("mini_siem_sidebar_collapsed") === "true";
 
 let currentUser = null;
 let allUsers = [];
@@ -1400,6 +1533,10 @@ const tabMeta = {
   alerts: {
     title: "Alert Investigation",
     subtitle: "KQL-like alert search with Description, Source raw and Packet inspection."
+  },
+  receivers: {
+    title: "Receivers",
+    subtitle: "Manage log sources, receiver settings and parser rule rollout."
   },
   rules: {
     title: "Visual Detection Rule Editor",
@@ -1534,6 +1671,33 @@ function formatNumber(value) {
 
 function nowTime() {
   return new Date().toLocaleTimeString();
+}
+
+function userInitial() {
+  const username = currentUser?.username || currentUser?.name || "";
+
+  if (!username) {
+    return "MS";
+  }
+
+  return username.trim().slice(0, 1).toUpperCase();
+}
+
+function updateSideBrandMark() {
+  if (!sideBrandMark) return;
+  sideBrandMark.textContent = userInitial();
+}
+
+function applySidebarState() {
+  if (!appShell) return;
+
+  appShell.classList.toggle("sidebar-collapsed", sidebarCollapsed);
+  localStorage.setItem("mini_siem_sidebar_collapsed", sidebarCollapsed ? "true" : "false");
+}
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  applySidebarState();
 }
 
 function setStatus(text) {
@@ -1986,6 +2150,1957 @@ function renderTimeline(target, points) {
       }).join("")}
     </div>
   `;
+}
+
+function saveReceiverTreeExpanded() {
+  localStorage.setItem(
+    "mini_siem_receiver_tree_expanded",
+    JSON.stringify(Array.from(receiverTreeExpanded))
+  );
+}
+
+function receiverRole(receiver) {
+  return receiver?.role || receiver?.receiver_role || "receiver";
+}
+
+function receiverParentId(receiver) {
+  return receiver?.parent_id || receiver?.parent || "";
+}
+
+function receiverIcon(receiver) {
+  const role = receiverRole(receiver);
+
+  if (role === "esm") return "▣";
+  if (role === "erc") return "▤";
+  if (role === "device") return "◈";
+
+  return "▸";
+}
+
+function receiverRoleLabel(receiver) {
+  const role = receiverRole(receiver);
+
+  if (role === "esm") return "ESM";
+  if (role === "erc") return "ERC";
+  if (role === "device") return "DEV";
+
+  return "LOG";
+}
+
+function setReceiverMessage(message, type = "info") {
+  if (!receiverMessage) return;
+
+  receiverMessage.textContent = message || "";
+  receiverMessage.className = `rule-message ${type}`;
+}
+
+function selectedReceiver() {
+  return allReceivers.find((receiver) => receiver.id === selectedReceiverId) || null;
+}
+
+function policyGroupName(id) {
+  const group = allPolicyGroups.find((item) => item.id === id);
+  return group ? (group.name || group.id) : id;
+}
+
+function buildReceiverTree() {
+  const byParent = new Map();
+
+  for (const receiver of allReceivers) {
+    const parent = receiverParentId(receiver) || "__root__";
+
+    if (!byParent.has(parent)) {
+      byParent.set(parent, []);
+    }
+
+    byParent.get(parent).push(receiver);
+  }
+
+  for (const list of byParent.values()) {
+    list.sort((a, b) => {
+      const roleOrder = {
+        esm: 1,
+        erc: 2,
+        receiver: 3,
+        device: 4
+      };
+
+      const ar = roleOrder[receiverRole(a)] || 99;
+      const br = roleOrder[receiverRole(b)] || 99;
+
+      if (ar !== br) return ar - br;
+
+      return String(a.name || a.id).localeCompare(String(b.name || b.id));
+    });
+  }
+
+  return byParent;
+}
+
+function receiverMatchesSearch(receiver) {
+  const q = receiverTreeSearch.trim().toLowerCase();
+
+  if (!q) return true;
+
+  const haystack = [
+    receiver.id,
+    receiver.name,
+    receiver.path,
+    receiver.source_type,
+    receiverRole(receiver)
+  ].join(" ").toLowerCase();
+
+  return haystack.includes(q);
+}
+
+function receiverHasVisibleDescendant(receiver, byParent) {
+  const children = byParent.get(receiver.id) || [];
+
+  for (const child of children) {
+    if (receiverMatchesSearch(child)) return true;
+    if (receiverHasVisibleDescendant(child, byParent)) return true;
+  }
+
+  return false;
+}
+
+function renderReceiverTreeNode(receiver, byParent, depth = 0) {
+  const children = byParent.get(receiver.id) || [];
+  const hasChildren = children.length > 0;
+  const expanded = receiverTreeExpanded.has(receiver.id);
+  const selected = selectedReceiverId === receiver.id;
+  const enabled = receiver.enabled !== false;
+
+  const visibleSelf = receiverMatchesSearch(receiver);
+  const visibleChild = receiverHasVisibleDescendant(receiver, byParent);
+
+  if (!visibleSelf && !visibleChild) {
+    return "";
+  }
+
+  const indent = depth * 16;
+  const childHtml = children
+    .map((child) => renderReceiverTreeNode(child, byParent, depth + 1))
+    .join("");
+
+  return `
+    <div class="receiver-tree-node">
+      <div
+        class="receiver-tree-row ${selected ? "selected" : ""} ${enabled ? "" : "disabled"}"
+        style="padding-left: ${indent}px"
+        data-receiver-id="${escapeAttr(receiver.id)}"
+      >
+        ${
+          hasChildren
+            ? `<button
+                 class="receiver-tree-caret"
+                 type="button"
+                 data-toggle-receiver-id="${escapeAttr(receiver.id)}"
+               >${expanded ? "▾" : "▸"}</button>`
+            : `<span class="receiver-tree-spacer"></span>`
+        }
+
+        <div class="receiver-tree-node-main">
+          <span class="receiver-tree-icon">${escapeHtml(receiverIcon(receiver))}</span>
+          <span class="receiver-tree-label" title="${escapeAttr(receiver.name || receiver.id)}">
+            ${escapeHtml(receiver.name || receiver.id)}
+          </span>
+          <span class="receiver-tree-role">${escapeHtml(receiverRoleLabel(receiver))}</span>
+        </div>
+      </div>
+
+      ${
+        hasChildren
+          ? `<div class="receiver-tree-children ${expanded ? "" : "collapsed"}">${childHtml}</div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderReceivers() {
+  if (!receiversList || !receiversCount) return;
+
+  receiversCount.textContent = String(allReceivers.length);
+
+  if (!allReceivers.length) {
+    receiversList.innerHTML = `<div class="empty">No receivers configured</div>`;
+    renderSelectedReceiverWorkspace();
+    return;
+  }
+
+  const byParent = buildReceiverTree();
+  let roots = byParent.get("__root__") || [];
+
+  if (!roots.length) {
+    roots = allReceivers.filter((receiver) => !receiverParentId(receiver));
+  }
+
+  receiversList.innerHTML = roots
+    .map((receiver) => renderReceiverTreeNode(receiver, byParent, 0))
+    .join("");
+
+  receiversList.querySelectorAll("[data-toggle-receiver-id]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+
+      const id = btn.dataset.toggleReceiverId;
+
+      if (receiverTreeExpanded.has(id)) {
+        receiverTreeExpanded.delete(id);
+      } else {
+        receiverTreeExpanded.add(id);
+      }
+
+      saveReceiverTreeExpanded();
+      renderReceivers();
+    });
+  });
+
+  receiversList.querySelectorAll("[data-receiver-id]").forEach((row) => {
+    row.addEventListener("click", () => {
+      selectReceiver(row.dataset.receiverId);
+    });
+
+    row.addEventListener("dblclick", () => {
+      openReceiverSettings(row.dataset.receiverId);
+    });
+  });
+
+  renderSelectedReceiverWorkspace();
+}
+
+function selectReceiver(id) {
+  const receiver = allReceivers.find((item) => item.id === id);
+
+  if (!receiver) {
+    selectedReceiverId = "";
+    renderSelectedReceiverWorkspace();
+    renderReceivers();
+    return;
+  }
+
+  selectedReceiverId = receiver.id;
+
+  if (receiverParentId(receiver)) {
+    receiverTreeExpanded.add(receiverParentId(receiver));
+    saveReceiverTreeExpanded();
+  }
+
+  renderReceivers();
+  renderSelectedReceiverWorkspace();
+  setReceiverMessage(`Selected receiver: ${receiver.name || receiver.id}`, "info");
+}
+
+function renderSelectedReceiverWorkspace() {
+  const receiver = selectedReceiver();
+
+  if (!receiver) {
+    if (receiverEmptyState) receiverEmptyState.classList.remove("hidden");
+    if (receiverDetailPanel) receiverDetailPanel.classList.add("hidden");
+    return;
+  }
+
+  if (receiverEmptyState) receiverEmptyState.classList.add("hidden");
+  if (receiverDetailPanel) receiverDetailPanel.classList.remove("hidden");
+
+  if (receiverDetailTitle) {
+    receiverDetailTitle.textContent = receiver.name || receiver.id;
+  }
+
+  if (receiverDetailSubtitle) {
+    receiverDetailSubtitle.textContent = [
+      receiver.id,
+      receiverRoleLabel(receiver),
+      receiver.source_type || "unknown source",
+      receiver.path || ""
+    ].filter(Boolean).join(" · ");
+  }
+
+  renderReceiverDashboard();
+  renderReceiverCustomDashboards();
+  renderReceiverParserRules();
+}
+
+function valueText(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return String(value);
+  }
+}
+
+function objectToSearchText(obj) {
+  if (!obj || typeof obj !== "object") return "";
+
+  const parts = [];
+
+  for (const [key, value] of Object.entries(obj)) {
+    parts.push(key);
+    parts.push(valueText(value));
+  }
+
+  return parts.join(" ").toLowerCase();
+}
+
+function getEventFieldValue(item, field) {
+  const event = item.event || {};
+
+  if (!field) return "";
+
+  if (item[field] !== undefined && item[field] !== null) {
+    return valueText(item[field]);
+  }
+
+  if (event[field] !== undefined && event[field] !== null) {
+    return valueText(event[field]);
+  }
+
+  if (event.fields && typeof event.fields === "object" && event.fields[field] !== undefined) {
+    return valueText(event.fields[field]);
+  }
+
+  if (event.extracted && typeof event.extracted === "object" && event.extracted[field] !== undefined) {
+    return valueText(event.extracted[field]);
+  }
+
+  const aliasMap = {
+    "source.ip": "src_ip",
+    "source.port": "src_port",
+    "destination.ip": "dst_ip",
+    "destination.port": "dst_port",
+    "user.name": "user",
+    "actor.name": "user",
+    "account.name": "user",
+    "process.name": "process_name",
+    "process.command_line": "command",
+    "network.protocol": "protocol",
+    "event.name": "event_name",
+    "event.type": "event_type",
+    "event.category": "event_category",
+    "event.action": "event_action",
+    "event.outcome": "event_outcome",
+    "event.severity": "severity",
+    "host.name": "host",
+    "service.name": "service",
+    "event.error_code": "error_code",
+    "linux.kernel.error_code": "error_code"
+  };
+
+  const alias = aliasMap[field];
+
+  if (alias && event[alias] !== undefined && event[alias] !== null) {
+    return valueText(event[alias]);
+  }
+
+  if (alias && item[alias] !== undefined && item[alias] !== null) {
+    return valueText(item[alias]);
+  }
+
+  return "";
+}
+
+function eventSearchHaystack(item) {
+  const event = item.event || {};
+
+  return [
+    item.id,
+    item.event_id,
+    item.event_name,
+    item.event_type,
+    item.source,
+    item.source_type,
+    item.severity,
+    item.host,
+    item.receiver_id,
+    item.receiver_name,
+
+    event.event_id,
+    event.event_name,
+    event.event_type,
+    event.event_code,
+    event.event_category,
+    event.event_action,
+    event.event_outcome,
+    event.source,
+    event.source_type,
+    event.severity,
+    event.host,
+    event.receiver_id,
+    event.receiver_name,
+    event.parser_status,
+    event.parser_rule_id,
+    event.parser_rule_name,
+    event.policy_group_id,
+    event.raw,
+    event.message,
+    event.user,
+    event.src_ip,
+    event.src_port,
+    event.dst_ip,
+    event.dst_port,
+    event.process_name,
+    event.command,
+    event.cmdline,
+    event.path,
+    event.program,
+    event.protocol,
+
+    objectToSearchText(event.fields),
+    objectToSearchText(event.extracted),
+    objectToSearchText(event)
+  ].join(" ").toLowerCase();
+}
+
+function tokenizeReceiverKql(query) {
+  const tokens = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+
+  while ((match = re.exec(query)) !== null) {
+    tokens.push(match[1] ?? match[2] ?? match[3]);
+  }
+
+  return tokens;
+}
+
+function parseKqlTerm(token) {
+  const negated = token.startsWith("-");
+  const clean = negated ? token.slice(1) : token;
+
+  const colonIndex = clean.indexOf(":");
+
+  if (colonIndex <= 0) {
+    return {
+      type: "text",
+      negated,
+      value: clean
+    };
+  }
+
+  return {
+    type: "field",
+    negated,
+    field: clean.slice(0, colonIndex),
+    value: clean.slice(colonIndex + 1)
+  };
+}
+
+function kqlTermMatches(item, token) {
+  if (!token) return true;
+
+  const upper = token.toUpperCase();
+  if (upper === "AND" || upper === "OR") return true;
+
+  let term = parseKqlTerm(token);
+
+  if (upper.startsWith("NOT ")) {
+    term = parseKqlTerm(token.slice(4));
+    term.negated = !term.negated;
+  }
+
+  let matched = false;
+
+  if (term.type === "text") {
+    const value = String(term.value || "").toLowerCase();
+    matched = !value || eventSearchHaystack(item).includes(value);
+  } else {
+    const expected = String(term.value || "").toLowerCase();
+    const actual = getEventFieldValue(item, term.field).toLowerCase();
+
+    if (expected === "*") {
+      matched = Boolean(actual);
+    } else if (expected.includes("*")) {
+      const pattern = expected
+        .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*/g, ".*");
+
+      matched = new RegExp(`^${pattern}$`, "i").test(actual);
+    } else {
+      matched = actual.includes(expected);
+    }
+  }
+
+  return term.negated ? !matched : matched;
+}
+
+function receiverKqlMatches(item, query) {
+  const q = String(query || "").trim();
+
+  if (!q) return true;
+
+  const rawTokens = tokenizeReceiverKql(q);
+
+  if (!rawTokens.length) return true;
+
+  let groups = [[]];
+
+  for (const token of rawTokens) {
+    if (token.toUpperCase() === "OR") {
+      groups.push([]);
+      continue;
+    }
+
+    if (token.toUpperCase() === "AND") {
+      continue;
+    }
+
+    if (token.toUpperCase() === "NOT") {
+      const nextIndex = rawTokens.indexOf(token) + 1;
+      continue;
+    }
+
+    groups[groups.length - 1].push(token);
+  }
+
+  return groups.some((group) => group.every((token, index) => {
+    if (token.toUpperCase() === "NOT") {
+      const next = group[index + 1];
+      return next ? !kqlTermMatches(item, next) : true;
+    }
+
+    if (index > 0 && group[index - 1]?.toUpperCase() === "NOT") {
+      return true;
+    }
+
+    return kqlTermMatches(item, token);
+  }));
+}
+
+function prettyFieldsTable(obj) {
+  if (!obj || typeof obj !== "object" || !Object.keys(obj).length) {
+    return `<div class="receiver-field-empty">No fields</div>`;
+  }
+
+  return `
+    <div class="receiver-fields-table">
+      ${Object.entries(obj).map(([key, value]) => `
+        <div class="receiver-field-row">
+          <div class="receiver-field-key">${escapeHtml(key)}</div>
+          <div class="receiver-field-value">${escapeHtml(valueText(value))}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function eventMatchesReceiverFilters(item) {
+  if (currentReceiverParserStatusFilter) {
+    if (eventParserStatus(item) !== currentReceiverParserStatusFilter) {
+      return false;
+    }
+  }
+
+  if (currentReceiverKqlFilter.trim()) {
+    return receiverKqlMatches(item, currentReceiverKqlFilter);
+  }
+
+  return true;
+}
+
+function updateReceiverFilterStateFromInputs() {
+  currentReceiverParserStatusFilter = receiverParserStatusFilterInput?.value || "";
+  currentReceiverKqlFilter = receiverKqlFilterInput?.value || "";
+}
+
+function clearReceiverFilters() {
+  currentReceiverParserStatusFilter = "";
+  currentReceiverKqlFilter = "";
+
+  if (receiverParserStatusFilterInput) receiverParserStatusFilterInput.value = "";
+  if (receiverKqlFilterInput) receiverKqlFilterInput.value = "";
+
+  renderSelectedReceiverWorkspace();
+}
+
+function receiverEvents() {
+  const receiver = selectedReceiver();
+
+  if (!receiver) return [];
+
+  return allEvents
+    .filter((item) => {
+      const event = item.event || {};
+      return item.receiver_id === receiver.id || event.receiver_id === receiver.id;
+    })
+    .filter(eventMatchesReceiverFilters);
+}
+
+function eventParserStatus(item) {
+  const event = item.event || {};
+  return item.parser_status || event.parser_status || "";
+}
+
+function eventTypeOf(item) {
+  const event = item.event || {};
+  return item.event_type || event.event_type || "unknown_event";
+}
+
+function countBy(items, getter) {
+  const out = {};
+
+  for (const item of items) {
+    const key = getter(item) || "unknown";
+    out[key] = (out[key] || 0) + 1;
+  }
+
+  return out;
+}
+
+function renderReceiverMiniBars(container, counts) {
+  if (!container) return;
+
+  const entries = Object.entries(counts || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12);
+
+  if (!entries.length) {
+    container.innerHTML = `<div class="empty small">No data for selected receiver</div>`;
+    return;
+  }
+
+  const max = Math.max(...entries.map(([, count]) => count), 1);
+
+  container.innerHTML = entries.map(([label, count]) => `
+    <div class="bar-row">
+      <div class="bar-label">${escapeHtml(label)}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${Math.max(4, Math.round((count / max) * 100))}%"></div>
+      </div>
+      <div class="bar-value">${escapeHtml(String(count))}</div>
+    </div>
+  `).join("");
+}
+
+function renderReceiverRecentEvents(events) {
+  if (!receiverRecentEvents) return;
+
+  const recent = events.slice(0, 25);
+
+  if (!recent.length) {
+    receiverRecentEvents.innerHTML = `<div class="empty">No events match selected receiver filters</div>`;
+    return;
+  }
+
+  receiverRecentEvents.innerHTML = `
+    <div class="receiver-log-table">
+      <div class="receiver-log-table-head">
+        <span>Time</span>
+        <span>Event</span>
+        <span>Status</span>
+        <span>Severity</span>
+        <span>Source</span>
+      </div>
+
+      ${recent.map((item) => {
+        const event = item.event || {};
+        const eventName = item.event_name || event.event_name || eventTypeOf(item);
+        const ts = item.received_at || event.received_at || item.ts || event.ts || "";
+        const status = eventParserStatus(item) || "unknown";
+        const severity = item.severity || event.severity || "info";
+        const source = item.source || event.source || "";
+        const raw = event.raw || item.raw || "";
+
+        const fields = event.fields || {};
+        const extracted = event.extracted || {};
+
+        const chipFields = [
+          event.user ? ["user", event.user] : null,
+          event.src_ip ? ["src_ip", event.src_ip] : null,
+          event["source.ip"] ? ["source.ip", event["source.ip"]] : null,
+          event.process_name ? ["process", event.process_name] : null,
+          event.parser_rule_name ? ["parser", event.parser_rule_name] : null
+        ].filter(Boolean);
+
+        return `
+          <details class="receiver-log-row">
+            <summary>
+              <span class="receiver-log-time">${escapeHtml(ts)}</span>
+              <span class="receiver-log-event">${escapeHtml(eventName)}</span>
+              <span class="receiver-log-status ${escapeAttr(status)}">${escapeHtml(status)}</span>
+              <span class="severity ${escapeAttr(severity)}">${escapeHtml(severity)}</span>
+              <span class="receiver-log-source">${escapeHtml(source)}</span>
+            </summary>
+
+            <div class="receiver-log-body">
+              ${
+                chipFields.length
+                  ? `<div class="receiver-log-summary-line">
+                      ${chipFields.map(([key, value]) => `
+                        <span class="receiver-log-chip">
+                          ${escapeHtml(key)}: <strong>${escapeHtml(valueText(value))}</strong>
+                        </span>
+                      `).join("")}
+                    </div>`
+                  : ""
+              }
+
+              <div>
+                <div class="receiver-log-raw-title">Raw log</div>
+                <pre class="receiver-log-raw">${escapeHtml(raw || "No raw log available")}</pre>
+              </div>
+
+              <div class="receiver-log-details-grid">
+                <div>
+                  <div class="receiver-log-raw-title">Mapped SIEM fields</div>
+                  ${prettyFieldsTable(fields)}
+                </div>
+
+                <div>
+                  <div class="receiver-log-raw-title">Extracted variables</div>
+                  ${prettyFieldsTable(extracted)}
+                </div>
+              </div>
+
+              <details class="receiver-full-json-details">
+                <summary>Show full event JSON</summary>
+                <pre class="receiver-log-json">${escapeHtml(prettyJson(event))}</pre>
+              </details>
+            </div>
+          </details>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function enabledParserRulesForReceiver(receiverId) {
+  return allParserRules.filter((rule) => {
+    const ids = Array.isArray(rule.enabled_receivers) ? rule.enabled_receivers : [];
+    return ids.includes(receiverId);
+  });
+}
+
+function renderReceiverDashboard() {
+  const receiver = selectedReceiver();
+
+  if (!receiver) return;
+
+  const events = receiverEvents();
+  const parsed = events.filter((item) => eventParserStatus(item) === "parsed");
+  const unknown = events.filter((item) => eventParserStatus(item) === "unparsed");
+  const parserRules = enabledParserRulesForReceiver(receiver.id);
+
+  if (receiverKpiEvents) receiverKpiEvents.textContent = String(events.length);
+  if (receiverKpiUnknown) receiverKpiUnknown.textContent = String(unknown.length);
+  if (receiverKpiParsed) receiverKpiParsed.textContent = String(parsed.length);
+  if (receiverKpiParserRules) receiverKpiParserRules.textContent = String(parserRules.length);
+
+  renderReceiverMiniBars(receiverEventTypesWidget, countBy(events, eventTypeOf));
+  renderReceiverMiniBars(receiverParserStatusWidget, countBy(events, eventParserStatus));
+  renderReceiverRecentEvents(events);
+}
+
+function renderReceiverCustomDashboards() {
+  if (!receiverCustomDashboardsList) return;
+
+  const receiver = selectedReceiver();
+
+  if (!receiver) {
+    receiverCustomDashboardsList.innerHTML = `<div class="empty small">Select receiver first</div>`;
+    return;
+  }
+
+  const selected = new Set(Array.isArray(receiver.dashboard_ids) ? receiver.dashboard_ids : []);
+
+  if (!customDashboards.length) {
+    receiverCustomDashboardsList.innerHTML = `<div class="empty small">No custom dashboards configured</div>`;
+    return;
+  }
+
+  receiverCustomDashboardsList.innerHTML = customDashboards.map((dashboard) => `
+    <label class="receiver-check-item">
+      <input
+        type="checkbox"
+        value="${escapeAttr(dashboard.id)}"
+        ${selected.has(dashboard.id) ? "checked" : ""}
+      />
+      <span>
+        <strong>${escapeHtml(dashboard.name || dashboard.id)}</strong>
+        <em>${escapeHtml(dashboard.description || dashboard.id)}</em>
+      </span>
+    </label>
+  `).join("");
+}
+
+function selectedReceiverDashboardIds() {
+  if (!receiverCustomDashboardsList) return [];
+
+  return Array.from(receiverCustomDashboardsList.querySelectorAll("input[type='checkbox']:checked"))
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function activateReceiverDashboardTab(tab) {
+  currentReceiverDashboardTab = tab || "standard";
+
+  document.querySelectorAll(".receiver-dashboard-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.receiverDashboardTab === currentReceiverDashboardTab);
+  });
+
+const views = {
+  standard: receiverDashboardStandard,
+  custom: receiverDashboardCustom
+};
+
+  Object.entries(views).forEach(([key, view]) => {
+    if (!view) return;
+    view.classList.toggle("active", key === currentReceiverDashboardTab);
+  });
+}
+
+function renderReceiverPolicyGroupChecks(selectedIds = []) {
+  if (!receiverPolicyGroupsList) return;
+
+  const selected = new Set(selectedIds || []);
+
+  if (!allPolicyGroups.length) {
+    receiverPolicyGroupsList.innerHTML = `<div class="empty small">No policy groups configured</div>`;
+    return;
+  }
+
+  receiverPolicyGroupsList.innerHTML = allPolicyGroups.map((group) => `
+    <label class="receiver-check-item">
+      <input
+        type="checkbox"
+        value="${escapeAttr(group.id)}"
+        ${selected.has(group.id) ? "checked" : ""}
+      />
+      <span>
+        <strong>${escapeHtml(group.name || group.id)}</strong>
+        <em>${escapeHtml(group.description || group.id)}</em>
+      </span>
+    </label>
+  `).join("");
+}
+
+function selectedReceiverPolicyGroupIds() {
+  if (!receiverPolicyGroupsList) return [];
+
+  return Array.from(receiverPolicyGroupsList.querySelectorAll("input[type='checkbox']:checked"))
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function renderReceiverParentOptions(currentId = "", selectedParentId = "") {
+  if (!receiverParentInput) return;
+
+  const candidates = allReceivers.filter((receiver) => receiver.id !== currentId);
+
+  receiverParentInput.innerHTML = `
+    <option value="">No parent / root</option>
+    ${candidates.map((receiver) => `
+      <option value="${escapeAttr(receiver.id)}" ${receiver.id === selectedParentId ? "selected" : ""}>
+        ${escapeHtml(receiver.name || receiver.id)} (${escapeHtml(receiverRoleLabel(receiver))})
+      </option>
+    `).join("")}
+  `;
+}
+
+function activateReceiverSettingsTab(tab) {
+  currentReceiverSettingsTab = tab || "config";
+
+  document.querySelectorAll(".receiver-settings-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.receiverSettingsTab === currentReceiverSettingsTab);
+  });
+
+const views = {
+  config: $("receiverSettingsConfig"),
+  parsers: $("receiverSettingsParsers"),
+  newParser: $("receiverSettingsNewParser")
+};
+
+  Object.entries(views).forEach(([key, view]) => {
+    if (!view) return;
+    view.classList.toggle("active", key === currentReceiverSettingsTab);
+  });
+}
+
+function receiverFromForm() {
+  const id = receiverIdInput.value.trim();
+
+  if (!id) throw new Error("Receiver ID is required");
+  if (!receiverNameInput.value.trim()) throw new Error("Receiver name is required");
+
+  const role = receiverRoleInput?.value || "receiver";
+  const type = receiverTypeInput?.value || "file";
+  const path = receiverPathInput?.value.trim() || "";
+
+  if ((role === "receiver" || role === "device") && !path) {
+    throw new Error("Receiver path is required for log receivers/devices");
+  }
+
+return {
+  id,
+  name: receiverNameInput.value.trim(),
+  role,
+  parent_id: receiverParentInput?.value || "",
+  type,
+  path,
+  enabled: receiverEnabledInput.checked,
+  source_type: receiverSourceTypeInput.value.trim() || "linux_log",
+  initial_position: receiverInitialPositionInput.value || "end",
+
+  file_pattern: receiverFilePatternInput?.value.trim() || "*.log",
+  recursive: receiverRecursiveInput?.checked || false,
+
+  policy_group_ids: selectedReceiverPolicyGroupIds(),
+  dashboard_ids: selectedReceiver()?.dashboard_ids || []
+};
+}
+
+function fillReceiverForm(receiver) {
+  editingReceiverId = receiver?.id || "";
+
+  receiverIdInput.disabled = Boolean(editingReceiverId);
+  receiverIdInput.value = receiver?.id || "";
+  receiverEnabledInput.checked = receiver?.enabled !== false;
+  receiverNameInput.value = receiver?.name || "";
+
+  if (receiverRoleInput) receiverRoleInput.value = receiverRole(receiver);
+  renderReceiverParentOptions(receiver?.id || "", receiverParentId(receiver));
+
+receiverTypeInput.value = receiver?.type || "file";
+receiverPathInput.value = receiver?.path || "";
+
+if (receiverFilePatternInput) {
+  receiverFilePatternInput.value = receiver?.file_pattern || "*.log";
+}
+
+if (receiverRecursiveInput) {
+  receiverRecursiveInput.checked = receiver?.recursive === true;
+}
+
+receiverSourceTypeInput.value = receiver?.source_type || "linux_log";
+receiverInitialPositionInput.value = receiver?.initial_position || "end";
+
+  renderReceiverPolicyGroupChecks(receiver?.policy_group_ids || []);
+
+  if (deleteReceiverBtn) {
+    deleteReceiverBtn.disabled = !editingReceiverId;
+  }
+}
+
+function newReceiver() {
+  const parent = selectedReceiver();
+
+  selectedReceiverId = parent?.id || selectedReceiverId;
+  editingReceiverId = "";
+
+  if (receiverSettingsPanel) {
+    receiverSettingsPanel.classList.remove("hidden");
+  }
+
+  receiverSettingsTitle.textContent = "New receiver";
+  receiverSettingsSubtitle.textContent = parent
+    ? `Parent: ${parent.name || parent.id}`
+    : "Create a new ESM, ERC, receiver or child source.";
+
+fillReceiverForm({
+  id: "",
+  name: "",
+  role: parent ? "receiver" : "esm",
+  parent_id: parent?.id || "",
+  type: "file",
+  path: "",
+  enabled: true,
+  source_type: "linux_log",
+  initial_position: "end",
+  file_pattern: "*.log",
+  recursive: false,
+  policy_group_ids: []
+});
+
+  clearParserRuleFormForReceiver();
+  activateReceiverSettingsTab("config");
+
+  setReceiverMessage("Creating new receiver", "info");
+}
+
+function openReceiverSettings(id = selectedReceiverId) {
+  const receiver = allReceivers.find((item) => item.id === id);
+
+  if (!receiver) {
+    setReceiverMessage("Select receiver first.", "error");
+    return;
+  }
+
+  selectedReceiverId = receiver.id;
+  editingReceiverId = receiver.id;
+
+  if (receiverSettingsPanel) {
+    receiverSettingsPanel.classList.remove("hidden");
+  }
+
+  receiverSettingsTitle.textContent = receiver.name || receiver.id;
+  receiverSettingsSubtitle.textContent = `${receiver.path || "root node"} · ${receiver.source_type || receiverRoleLabel(receiver)}`;
+
+  fillReceiverForm(receiver);
+  clearParserRuleFormForReceiver();
+  renderReceiverParserRules();
+  renderReceivers();
+  renderSelectedReceiverWorkspace();
+  activateReceiverSettingsTab("config");
+
+  setReceiverMessage(`Opened receiver settings: ${receiver.name || receiver.id}`, "info");
+}
+
+function closeReceiverSettings() {
+  editingReceiverId = "";
+
+  if (receiverSettingsPanel) {
+    receiverSettingsPanel.classList.add("hidden");
+  }
+
+  setReceiverMessage("", "info");
+}
+
+async function saveReceiver() {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can save receivers.", "error");
+    return;
+  }
+
+  try {
+    const receiver = receiverFromForm();
+    const exists = allReceivers.some((item) => item.id === receiver.id);
+
+    const method = exists ? "PUT" : "POST";
+    const url = exists
+      ? `/api/receivers/${encodeURIComponent(receiver.id)}`
+      : "/api/receivers";
+
+    await fetchJson(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(receiver)
+    });
+
+    setReceiverMessage(`${exists ? "Updated" : "Created"} receiver: ${receiver.id}`, "ok");
+
+    selectedReceiverId = receiver.id;
+    editingReceiverId = receiver.id;
+
+    if (receiver.parent_id) {
+      receiverTreeExpanded.add(receiver.parent_id);
+      saveReceiverTreeExpanded();
+    }
+
+    await loadAll();
+
+    openReceiverSettings(receiver.id);
+    activateTab("receivers");
+  } catch (err) {
+    setReceiverMessage(`Save receiver failed: ${err.message}`, "error");
+  }
+}
+
+async function deleteReceiver(id = editingReceiverId || selectedReceiverId) {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can delete receivers.", "error");
+    return;
+  }
+
+  const receiver = allReceivers.find((item) => item.id === id);
+
+  if (!receiver) {
+    setReceiverMessage("No receiver selected.", "error");
+    return;
+  }
+
+  const childCount = allReceivers.filter((item) => receiverParentId(item) === receiver.id).length;
+
+  if (childCount > 0) {
+    setReceiverMessage(`Cannot delete ${receiver.id}: it has ${childCount} child receiver(s). Delete or move children first.`, "error");
+    return;
+  }
+
+  if (!confirm(`Delete receiver ${receiver.id}?`)) {
+    return;
+  }
+
+  try {
+    await fetchJson(`/api/receivers/${encodeURIComponent(receiver.id)}`, {
+      method: "DELETE"
+    });
+
+    setReceiverMessage(`Deleted receiver: ${receiver.id}`, "ok");
+
+    selectedReceiverId = "";
+    editingReceiverId = "";
+
+    closeReceiverSettings();
+    await loadAll();
+    activateTab("receivers");
+  } catch (err) {
+    setReceiverMessage(`Delete receiver failed: ${err.message}`, "error");
+  }
+}
+
+async function saveReceiverDashboards() {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can assign dashboards.", "error");
+    return;
+  }
+
+  const receiver = selectedReceiver();
+
+  if (!receiver) {
+    setReceiverMessage("Select receiver first.", "error");
+    return;
+  }
+
+  const nextReceiver = {
+    ...receiver,
+    dashboard_ids: selectedReceiverDashboardIds()
+  };
+
+  try {
+    await fetchJson(`/api/receivers/${encodeURIComponent(receiver.id)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(nextReceiver)
+    });
+
+    setReceiverMessage(`Saved dashboard assignment for ${receiver.id}`, "ok");
+
+    await loadAll();
+    selectedReceiverId = receiver.id;
+    renderSelectedReceiverWorkspace();
+    activateReceiverDashboardTab("custom");
+  } catch (err) {
+    setReceiverMessage(`Save dashboards failed: ${err.message}`, "error");
+  }
+}
+
+function renderReceiverParserRules() {
+  if (!receiverParserRulesList) return;
+
+  const receiver = selectedReceiver();
+
+  if (!receiver) {
+    receiverParserRulesList.innerHTML = `<div class="empty">Select a receiver to view parser rules.</div>`;
+    selectedParserRuleId = "";
+    return;
+  }
+
+  if (!allParserRules.length) {
+    receiverParserRulesList.innerHTML = `<div class="empty">No parser rules configured.</div>`;
+    selectedParserRuleId = "";
+    return;
+  }
+
+  const stillExists = allParserRules.some((rule) => rule.id === selectedParserRuleId);
+  if (!stillExists) {
+    selectedParserRuleId = "";
+  }
+
+  receiverParserRulesList.innerHTML = allParserRules.map((rule) => {
+    const enabledReceivers = Array.isArray(rule.enabled_receivers) ? rule.enabled_receivers : [];
+    const enabledHere = enabledReceivers.includes(receiver.id);
+    const globallyEnabled = rule.enabled !== false;
+    const selected = selectedParserRuleId === rule.id;
+
+    return `
+      <article
+        class="receiver-parser-rule-row ${selected ? "selected" : ""} ${enabledHere && globallyEnabled ? "" : "disabled"}"
+        data-parser-rule-id="${escapeAttr(rule.id)}"
+      >
+        <div class="receiver-parser-rule-top">
+          <div>
+            <strong>${escapeHtml(rule.name || rule.id)}</strong>
+            <span>${escapeHtml(rule.id || "")}</span>
+          </div>
+
+          <span class="rule-state ${enabledHere && globallyEnabled ? "enabled" : "disabled"}">
+            ${enabledHere && globallyEnabled ? "enabled here" : "disabled here"}
+          </span>
+        </div>
+
+        <div class="receiver-parser-rule-meta">
+          <span class="badge">${escapeHtml(rule.policy_group_id || "no policy group")}</span>
+          <span class="badge">${escapeHtml(rule.match_type || "regex")}</span>
+          <span class="badge">${escapeHtml(rule.constants?.event_type || "no event type")}</span>
+          <span class="badge">receivers: ${escapeHtml((rule.enabled_receivers || []).join(", ") || "none")}</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  receiverParserRulesList.querySelectorAll("[data-parser-rule-id]").forEach((row) => {
+    row.addEventListener("click", () => {
+      selectedParserRuleId = row.dataset.parserRuleId;
+      renderReceiverParserRules();
+    });
+
+    row.addEventListener("dblclick", () => {
+      selectedParserRuleId = row.dataset.parserRuleId;
+      editSelectedParserRuleFromSettings();
+    });
+  });
+}
+
+async function toggleParserRuleForSelectedReceiver(ruleId) {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can change parser rollout.", "error");
+    return;
+  }
+
+  const receiver = selectedReceiver();
+  if (!receiver) {
+    setReceiverMessage("Select a receiver first.", "error");
+    return;
+  }
+
+  const rule = allParserRules.find((item) => item.id === ruleId);
+  if (!rule) {
+    setReceiverMessage(`Parser rule not found: ${ruleId}`, "error");
+    return;
+  }
+
+  const nextRule = cloneJson(rule);
+  const ids = new Set(Array.isArray(nextRule.enabled_receivers) ? nextRule.enabled_receivers : []);
+
+  if (ids.has(receiver.id)) {
+    ids.delete(receiver.id);
+  } else {
+    ids.add(receiver.id);
+  }
+
+  nextRule.enabled_receivers = Array.from(ids);
+
+  try {
+    await fetchJson(`/api/parser-rules/${encodeURIComponent(ruleId)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(nextRule)
+    });
+
+    setReceiverMessage(`Updated parser rollout: ${ruleId}`, "ok");
+
+    await loadAll();
+    selectedReceiverId = receiver.id;
+    renderReceiverParserRules();
+    renderReceivers();
+    activateTab("receivers");
+  } catch (err) {
+    setReceiverMessage(`Parser rollout update failed: ${err.message}`, "error");
+  }
+}
+
+function newParserRuleFromSettings() {
+  const receiver = selectedReceiver();
+
+  if (!receiver) {
+    setReceiverMessage("Select receiver first.", "error");
+    return;
+  }
+
+  selectedParserRuleId = "";
+  clearParserRuleFormForReceiver();
+  activateReceiverSettingsTab("newParser");
+  setReceiverMessage("Creating new parser rule.", "info");
+}
+
+function editSelectedParserRuleFromSettings() {
+  if (!selectedParserRuleId) {
+    setReceiverMessage("Select parser rule first.", "error");
+    return;
+  }
+
+  editParserRuleForReceiver(selectedParserRuleId);
+}
+
+async function deleteSelectedParserRuleFromSettings() {
+  if (!selectedParserRuleId) {
+    setReceiverMessage("Select parser rule first.", "error");
+    return;
+  }
+
+  await deleteParserRuleForReceiver(selectedParserRuleId);
+  selectedParserRuleId = "";
+  renderReceiverParserRules();
+}
+
+async function toggleSelectedParserRuleFromSettings() {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can change parser rollout.", "error");
+    return;
+  }
+
+  const receiver = selectedReceiver();
+
+  if (!receiver) {
+    setReceiverMessage("Select receiver first.", "error");
+    return;
+  }
+
+  if (!selectedParserRuleId) {
+    setReceiverMessage("Select parser rule first.", "error");
+    return;
+  }
+
+  const rule = allParserRules.find((item) => item.id === selectedParserRuleId);
+
+  if (!rule) {
+    setReceiverMessage(`Parser rule not found: ${selectedParserRuleId}`, "error");
+    return;
+  }
+
+  const nextRule = cloneJson(rule);
+  const enabledReceivers = new Set(
+    Array.isArray(nextRule.enabled_receivers) ? nextRule.enabled_receivers : []
+  );
+
+  if (enabledReceivers.has(receiver.id)) {
+    enabledReceivers.delete(receiver.id);
+  } else {
+    enabledReceivers.add(receiver.id);
+  }
+
+  nextRule.enabled_receivers = Array.from(enabledReceivers);
+
+  try {
+    await fetchJson(`/api/parser-rules/${encodeURIComponent(rule.id)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(nextRule)
+    });
+
+    setReceiverMessage(
+      `${enabledReceivers.has(receiver.id) ? "Enabled" : "Disabled"} parser rule on this receiver: ${rule.id}`,
+      "ok"
+    );
+
+    await loadAll();
+
+    selectedReceiverId = receiver.id;
+    selectedParserRuleId = rule.id;
+
+    renderReceivers();
+    renderSelectedReceiverWorkspace();
+    renderReceiverParserRules();
+    activateReceiverSettingsTab("parsers");
+  } catch (err) {
+    setReceiverMessage(`Parser rollout update failed: ${err.message}`, "error");
+  }
+}
+
+function editParserRuleForReceiver(ruleId) {
+  const rule = allParserRules.find((item) => item.id === ruleId);
+
+  if (!rule) {
+    setReceiverMessage(`Parser rule not found: ${ruleId}`, "error");
+    return;
+  }
+
+  selectedParserRuleId = ruleId;
+
+  fillParserRuleFormForReceiver(rule);
+  activateReceiverSettingsTab("newParser");
+}
+
+async function deleteParserRuleForReceiver(ruleId) {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can delete parser rules.", "error");
+    return;
+  }
+
+  if (!confirm(`Delete parser rule ${ruleId}?`)) {
+    return;
+  }
+
+  try {
+    await fetchJson(`/api/parser-rules/${encodeURIComponent(ruleId)}`, {
+      method: "DELETE"
+    });
+
+    setReceiverMessage(`Deleted parser rule: ${ruleId}`, "ok");
+
+    if (selectedParserRuleId === ruleId) {
+      selectedParserRuleId = "";
+    }
+
+    await loadAll();
+
+    const receiver = selectedReceiver();
+    if (receiver) {
+      openReceiverSettings(receiver.id);
+      activateReceiverSettingsTab("parsers");
+    }
+  } catch (err) {
+    setReceiverMessage(`Delete parser rule failed: ${err.message}`, "error");
+  }
+}
+
+function flattenFieldCatalog() {
+  const out = [];
+
+  for (const group of fieldCatalog || []) {
+    const groupName = String(group.group || "Fields");
+    const fields = Array.isArray(group.fields) ? group.fields : [];
+
+    for (const field of fields) {
+      out.push({
+        group: groupName,
+        field: String(field)
+      });
+    }
+  }
+
+  return out;
+}
+
+function fieldOptionsHtml(selected = "") {
+  const flat = flattenFieldCatalog();
+
+  if (!flat.length) {
+    return `<option value="${escapeAttr(selected)}">${escapeHtml(selected || "No field catalog loaded")}</option>`;
+  }
+
+  const groups = {};
+
+  for (const item of flat) {
+    if (!groups[item.group]) groups[item.group] = [];
+    groups[item.group].push(item.field);
+  }
+
+  return Object.entries(groups).map(([group, fields]) => `
+    <optgroup label="${escapeAttr(group)}">
+      ${fields.map((field) => `
+        <option value="${escapeAttr(field)}" ${field === selected ? "selected" : ""}>
+          ${escapeHtml(field)}
+        </option>
+      `).join("")}
+    </optgroup>
+  `).join("");
+}
+
+function guessTargetField(variable) {
+  const v = lower(variable);
+
+  if (v === "user" || v === "username" || v === "account") return "user.name";
+  if (v === "actor") return "actor.name";
+
+  if (v === "src_ip" || v === "source_ip" || v === "ip" || v === "remote_ip") return "source.ip";
+  if (v === "src_port" || v === "source_port" || v === "port" || v === "remote_port") return "source.port";
+
+  if (v === "dst_ip" || v === "destination_ip" || v === "dest_ip") return "destination.ip";
+  if (v === "dst_port" || v === "destination_port" || v === "dest_port") return "destination.port";
+
+  if (v === "protocol") return "network.protocol";
+  if (v === "transport") return "network.transport";
+  if (v === "direction") return "network.direction";
+
+  if (v === "process" || v === "program" || v === "process_name" || v === "comm") return "process.name";
+  if (v === "pid") return "process.pid";
+  if (v === "ppid") return "process.ppid";
+  if (v === "command" || v === "cmdline" || v === "command_line") return "process.command_line";
+
+  if (v === "path" || v === "file_path" || v === "name") return "file.path";
+  if (v === "target_path") return "file.target_path";
+
+  if (v === "service") return "service.name";
+  if (v === "syslog_pid") return "syslog.pid";
+  if (v === "identifier" || v === "syslog_identifier") return "syslog.identifier";
+
+  if (v === "error_code") return "event.error_code";
+  if (v === "message") return "event.message";
+  if (v === "reason") return "event.reason";
+
+  if (v === "url") return "url.original";
+  if (v === "domain") return "dns.question.name";
+
+  return "custom.string1";
+}
+
+function renderParserPolicyOptionsForReceiver() {
+  if (!parserPolicyGroupInput) return;
+
+  if (!allPolicyGroups.length) {
+    parserPolicyGroupInput.innerHTML = `<option value="">No policy groups</option>`;
+    return;
+  }
+
+  parserPolicyGroupInput.innerHTML = allPolicyGroups.map((group) => `
+    <option value="${escapeAttr(group.id)}">
+      ${escapeHtml(group.name || group.id)}
+    </option>
+  `).join("");
+}
+
+function renderParserReceiversForReceiver(selectedIds = []) {
+  if (!parserReceiversList) return;
+
+  const selected = new Set(selectedIds || []);
+
+  if (!allReceivers.length) {
+    parserReceiversList.innerHTML = `<div class="empty small">No receivers configured</div>`;
+    return;
+  }
+
+  parserReceiversList.innerHTML = allReceivers.map((receiver) => `
+    <label class="receiver-check-item">
+      <input
+        type="checkbox"
+        value="${escapeAttr(receiver.id)}"
+        ${selected.has(receiver.id) ? "checked" : ""}
+      />
+      <span>
+        <strong>${escapeHtml(receiver.name || receiver.id)}</strong>
+        <em>${escapeHtml(receiver.path || receiver.id)}</em>
+      </span>
+    </label>
+  `).join("");
+}
+
+function selectedParserReceiverIdsForReceiver() {
+  if (!parserReceiversList) return [];
+
+  return Array.from(parserReceiversList.querySelectorAll("input[type='checkbox']:checked"))
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function parserFieldOrderForReceiver() {
+  return splitCsv(parserFieldOrderInput?.value || "");
+}
+
+function parserRuleFromFormForReceiver() {
+  const id = parserRuleIdInput.value.trim();
+
+  if (!id) throw new Error("Parser Rule ID is required");
+  if (!parserRuleNameInput.value.trim()) throw new Error("Parser rule name is required");
+  if (!parserPolicyGroupInput.value) throw new Error("Policy group is required");
+
+  const matchType = parserMatchTypeInput.value || "regex";
+  const fieldOrder = parserFieldOrderForReceiver();
+
+  if (matchType === "regex") {
+    if (!parserPatternInput.value.trim()) {
+      throw new Error("Regex pattern is required");
+    }
+
+    if (!fieldOrder.length) {
+      throw new Error("Field order is required for regex parser");
+    }
+  }
+
+  const field_mapping = {};
+
+  for (const [variable, targetField] of Object.entries(currentParserMapping || {})) {
+    if (!variable || !targetField) continue;
+    field_mapping[targetField] = `$${variable}`;
+  }
+
+  const constants = {
+    event_code: parserConstantEventCodeInput.value.trim(),
+    event_name: parserConstantEventNameInput.value.trim(),
+    event_type: parserConstantEventTypeInput.value.trim(),
+    event_category: parserConstantEventCategoryInput.value.trim(),
+    event_action: parserConstantEventActionInput.value.trim(),
+    event_outcome: parserConstantEventOutcomeInput.value.trim(),
+    severity: parserConstantSeverityInput.value || "info",
+    vendor: parserConstantVendorInput.value.trim(),
+    product: parserConstantProductInput.value.trim()
+  };
+
+  const rule = {
+    id,
+    name: parserRuleNameInput.value.trim(),
+    enabled: parserRuleEnabledInput.checked,
+    policy_group_id: parserPolicyGroupInput.value,
+    match_type: matchType,
+    sample_raw: parserRawSampleInput.value,
+    pattern: matchType === "regex" ? parserPatternInput.value : "",
+    field_order: matchType === "regex" ? fieldOrder : [],
+    field_mapping,
+    constants,
+    enabled_receivers: selectedParserReceiverIdsForReceiver()
+  };
+
+  if (matchType === "json") {
+    rule.json_paths = {};
+  }
+
+  return rule;
+}
+
+function updateParserModeHintForReceiver() {
+  if (!parserMatchTypeInput) return;
+
+  const matchType = parserMatchTypeInput.value || "regex";
+
+  if (matchType === "json") {
+    if (parserPatternInput) {
+      parserPatternInput.placeholder = "Not used for JSON mode";
+    }
+
+    if (parserFieldOrderInput) {
+      parserFieldOrderInput.placeholder = "Not used for JSON mode";
+    }
+  } else {
+    if (parserPatternInput) {
+      parserPatternInput.placeholder = "Failed password for (invalid user )?(\\S+) from (\\S+) port (\\d+) (\\S+)";
+    }
+
+    if (parserFieldOrderInput) {
+      parserFieldOrderInput.placeholder = "invalid_prefix, user, src_ip, src_port, protocol";
+    }
+  }
+}
+
+function updateParserRulePreviewForReceiver() {
+  if (!parserRuleJsonPreview) return;
+
+  try {
+    const rule = parserRuleFromFormForReceiver();
+    parserRuleJsonPreview.textContent = prettyJson(rule);
+  } catch (_) {
+    const draft = {
+      id: parserRuleIdInput?.value || "",
+      name: parserRuleNameInput?.value || "",
+      enabled: parserRuleEnabledInput?.checked ?? true,
+      policy_group_id: parserPolicyGroupInput?.value || "",
+      match_type: parserMatchTypeInput?.value || "regex",
+      sample_raw: parserRawSampleInput?.value || "",
+      pattern: parserPatternInput?.value || "",
+      field_order: parserFieldOrderForReceiver(),
+      field_mapping: currentParserMapping || {},
+      constants: {
+        event_code: parserConstantEventCodeInput?.value || "",
+        event_name: parserConstantEventNameInput?.value || "",
+        event_type: parserConstantEventTypeInput?.value || "",
+        event_category: parserConstantEventCategoryInput?.value || "",
+        event_action: parserConstantEventActionInput?.value || "",
+        event_outcome: parserConstantEventOutcomeInput?.value || "",
+        severity: parserConstantSeverityInput?.value || "medium",
+        vendor: parserConstantVendorInput?.value || "",
+        product: parserConstantProductInput?.value || ""
+      },
+      enabled_receivers: selectedParserReceiverIdsForReceiver()
+    };
+
+    parserRuleJsonPreview.textContent = prettyJson(draft);
+  }
+}
+
+function renderParserMappingForReceiver() {
+  if (!parserMappingRows) return;
+
+  const variables = Object.keys(currentParserExtracted || {});
+
+  if (!variables.length) {
+    parserMappingRows.innerHTML = `<div class="empty small">Run extraction test to build mapping rows.</div>`;
+    updateParserRulePreviewForReceiver();
+    return;
+  }
+
+  for (const variable of variables) {
+    if (!currentParserMapping[variable]) {
+      currentParserMapping[variable] = guessTargetField(variable);
+    }
+  }
+
+  parserMappingRows.innerHTML = variables.map((variable) => `
+    <div class="parser-mapping-row">
+      <div>
+        <span>Extracted variable</span>
+        <strong>$${escapeHtml(variable)}</strong>
+        <em>${escapeHtml(String(currentParserExtracted[variable] ?? ""))}</em>
+      </div>
+
+      <div class="field">
+        <label>SIEM field</label>
+        <select data-parser-variable="${escapeAttr(variable)}">
+          ${fieldOptionsHtml(currentParserMapping[variable])}
+        </select>
+      </div>
+    </div>
+  `).join("");
+
+  parserMappingRows.querySelectorAll("select[data-parser-variable]").forEach((select) => {
+    select.addEventListener("change", () => {
+      currentParserMapping[select.dataset.parserVariable] = select.value;
+      updateParserRulePreviewForReceiver();
+    });
+  });
+
+  updateParserRulePreviewForReceiver();
+}
+
+function clearParserRuleFormForReceiver() {
+  editingParserRuleId = "";
+  currentParserExtracted = {};
+  currentParserMapping = {};
+
+  renderParserPolicyOptionsForReceiver();
+
+  if (parserRuleFormTitle) parserRuleFormTitle.textContent = "Create parser rule";
+  if (parserEditorModePill) parserEditorModePill.textContent = "create mode";
+
+  if (parserRuleIdInput) {
+    parserRuleIdInput.disabled = false;
+    parserRuleIdInput.value = "";
+  }
+
+  if (parserRuleEnabledInput) parserRuleEnabledInput.checked = true;
+  if (parserRuleNameInput) parserRuleNameInput.value = "";
+
+  const receiver = selectedReceiver();
+  if (parserPolicyGroupInput) {
+    const receiverGroups = Array.isArray(receiver?.policy_group_ids) ? receiver.policy_group_ids : [];
+    parserPolicyGroupInput.value = receiverGroups[0] || allPolicyGroups[0]?.id || "";
+  }
+
+  if (parserMatchTypeInput) parserMatchTypeInput.value = "regex";
+  updateParserModeHintForReceiver();
+
+  if (parserRawSampleInput) parserRawSampleInput.value = "";
+  if (parserPatternInput) parserPatternInput.value = "";
+  if (parserFieldOrderInput) parserFieldOrderInput.value = "";
+
+  if (parserConstantEventCodeInput) parserConstantEventCodeInput.value = "";
+  if (parserConstantEventNameInput) parserConstantEventNameInput.value = "";
+  if (parserConstantEventTypeInput) parserConstantEventTypeInput.value = "";
+  if (parserConstantEventCategoryInput) parserConstantEventCategoryInput.value = "";
+  if (parserConstantEventActionInput) parserConstantEventActionInput.value = "";
+  if (parserConstantEventOutcomeInput) parserConstantEventOutcomeInput.value = "";
+  if (parserConstantSeverityInput) parserConstantSeverityInput.value = "medium";
+  if (parserConstantVendorInput) parserConstantVendorInput.value = "";
+  if (parserConstantProductInput) parserConstantProductInput.value = "";
+
+  const selectedReceivers = receiver?.id ? [receiver.id] : [];
+  renderParserReceiversForReceiver(selectedReceivers);
+
+  if (parserExtractedPreview) parserExtractedPreview.textContent = "No extraction test yet.";
+
+  renderParserMappingForReceiver();
+
+  if (createParserRuleBtn) createParserRuleBtn.disabled = false;
+  if (updateParserRuleBtn) updateParserRuleBtn.disabled = true;
+
+  updateParserRulePreviewForReceiver();
+}
+
+function fillParserRuleFormForReceiver(rule) {
+  editingParserRuleId = rule.id || "";
+  currentParserExtracted = {};
+  currentParserMapping = {};
+
+  renderParserPolicyOptionsForReceiver();
+
+  if (parserRuleFormTitle) parserRuleFormTitle.textContent = "Edit parser rule";
+  if (parserEditorModePill) parserEditorModePill.textContent = "edit mode";
+
+  if (parserRuleIdInput) {
+    parserRuleIdInput.disabled = true;
+    parserRuleIdInput.value = rule.id || "";
+  }
+
+  if (parserRuleEnabledInput) parserRuleEnabledInput.checked = rule.enabled !== false;
+  if (parserRuleNameInput) parserRuleNameInput.value = rule.name || "";
+  if (parserPolicyGroupInput) parserPolicyGroupInput.value = rule.policy_group_id || "";
+  if (parserMatchTypeInput) parserMatchTypeInput.value = rule.match_type || "regex";
+  updateParserModeHintForReceiver();
+  if (parserRawSampleInput) parserRawSampleInput.value = rule.sample_raw || "";
+  if (parserPatternInput) parserPatternInput.value = rule.pattern || "";
+  if (parserFieldOrderInput) parserFieldOrderInput.value = joinCsv(rule.field_order || []);
+
+  const constants = rule.constants || {};
+  if (parserConstantEventCodeInput) parserConstantEventCodeInput.value = constants.event_code || "";
+  if (parserConstantEventNameInput) parserConstantEventNameInput.value = constants.event_name || "";
+  if (parserConstantEventTypeInput) parserConstantEventTypeInput.value = constants.event_type || "";
+  if (parserConstantEventCategoryInput) parserConstantEventCategoryInput.value = constants.event_category || "";
+  if (parserConstantEventActionInput) parserConstantEventActionInput.value = constants.event_action || "";
+  if (parserConstantEventOutcomeInput) parserConstantEventOutcomeInput.value = constants.event_outcome || "";
+  if (parserConstantSeverityInput) parserConstantSeverityInput.value = constants.severity || "medium";
+  if (parserConstantVendorInput) parserConstantVendorInput.value = constants.vendor || "";
+  if (parserConstantProductInput) parserConstantProductInput.value = constants.product || "";
+
+  const mapping = rule.field_mapping || {};
+  for (const [targetField, sourceExpr] of Object.entries(mapping)) {
+    const variable = String(sourceExpr || "").replace(/^\$/, "");
+    if (variable) {
+      currentParserMapping[variable] = targetField;
+      currentParserExtracted[variable] = "";
+    }
+  }
+
+  renderParserReceiversForReceiver(rule.enabled_receivers || []);
+  renderParserMappingForReceiver();
+
+  if (parserExtractedPreview) {
+    parserExtractedPreview.innerHTML = detailPre(prettyJson({
+      mapping: rule.field_mapping || {},
+      note: "Run extraction test to preview actual extracted values."
+    }));
+  }
+
+  if (createParserRuleBtn) createParserRuleBtn.disabled = true;
+  if (updateParserRuleBtn) updateParserRuleBtn.disabled = false;
+
+  updateParserRulePreviewForReceiver();
+}
+
+async function testParserRuleForReceiver() {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can test parser rules.", "error");
+    return;
+  }
+
+  try {
+    const rule = parserRuleFromFormForReceiver();
+
+    const data = await fetchJson("/api/parser-rules/test", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        raw: parserRawSampleInput.value,
+        rule
+      })
+    });
+
+    currentParserExtracted = data.extracted || {};
+
+    if (!data.matched) {
+      if (parserExtractedPreview) {
+        parserExtractedPreview.innerHTML = `<div class="empty">No match. Check regex pattern and field_order.</div>`;
+      }
+
+      setReceiverMessage("Parser did not match sample.", "error");
+      renderParserMappingForReceiver();
+      return;
+    }
+
+    if (parserExtractedPreview) {
+      parserExtractedPreview.innerHTML = detailPre(prettyJson({
+        matched: data.matched,
+        extracted: data.extracted,
+        event_preview: data.event_preview
+      }));
+    }
+
+    setReceiverMessage("Extraction matched. Map variables to SIEM fields.", "ok");
+    renderParserMappingForReceiver();
+  } catch (err) {
+    setReceiverMessage(`Parser test failed: ${err.message}`, "error");
+  }
+}
+
+async function createParserRuleForReceiver() {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can create parser rules.", "error");
+    return;
+  }
+
+  try {
+    const rule = parserRuleFromFormForReceiver();
+
+    await fetchJson("/api/parser-rules", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(rule)
+    });
+
+    setReceiverMessage(`Created parser rule: ${rule.id}`, "ok");
+
+    await loadAll();
+
+    const receiver = selectedReceiver();
+    if (receiver) {
+      openReceiverSettings(receiver.id);
+      activateReceiverSettingsTab("parsers");
+    }
+
+    selectedParserRuleId = rule.id;
+    renderReceiverParserRules();
+    clearParserRuleFormForReceiver();
+
+  } catch (err) {
+    setReceiverMessage(`Create parser rule failed: ${err.message}`, "error");
+    updateParserRulePreviewForReceiver();
+  }
+}
+
+async function updateParserRuleForReceiver() {
+  if (!canAdmin()) {
+    setReceiverMessage("Only admin can update parser rules.", "error");
+    return;
+  }
+
+  try {
+    if (!editingParserRuleId) {
+      throw new Error("No parser rule selected");
+    }
+
+    const rule = parserRuleFromFormForReceiver();
+    rule.id = editingParserRuleId;
+
+    await fetchJson(`/api/parser-rules/${encodeURIComponent(editingParserRuleId)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(rule)
+    });
+
+    setReceiverMessage(`Updated parser rule: ${editingParserRuleId}`, "ok");
+
+    await loadAll();
+
+    const receiver = selectedReceiver();
+    if (receiver) {
+      openReceiverSettings(receiver.id);
+      activateReceiverSettingsTab("parsers");
+    }
+
+    selectedParserRuleId = editingParserRuleId;
+    renderReceiverParserRules();
+    clearParserRuleFormForReceiver();
+
+  } catch (err) {
+    setReceiverMessage(`Update parser rule failed: ${err.message}`, "error");
+    updateParserRulePreviewForReceiver();
+  }
+}
+
+async function copyParserRuleJsonForReceiver() {
+  try {
+    const rule = parserRuleFromFormForReceiver();
+    const text = prettyJson(rule);
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const tmp = document.createElement("textarea");
+      tmp.value = text;
+      document.body.appendChild(tmp);
+      tmp.select();
+      document.execCommand("copy");
+      tmp.remove();
+    }
+
+    setReceiverMessage("Parser JSON copied.", "ok");
+  } catch (err) {
+    setReceiverMessage(`Copy failed: ${err.message}`, "error");
+  }
 }
 
 function renderDashboard() {
@@ -2476,6 +4591,10 @@ function updateAuthUi() {
     activateTab("dashboard");
   }
 
+  if (!canAdmin() && document.querySelector("#tabReceivers.active")) {
+    activateTab("dashboard");
+  }
+
   if (!canAdmin() && document.querySelector("#tabUsers.active")) {
     activateTab("dashboard");
   }
@@ -2492,6 +4611,10 @@ function showLogin() {
     autoRefreshTimer = null;
   }
 
+  if (sideBrandMark) {
+    sideBrandMark.textContent = "MS";
+  }
+
   updateAuthUi();
 }
 
@@ -2500,6 +4623,8 @@ function showApp() {
   if (appShell) appShell.classList.remove("app-hidden");
 
   updateAuthUi();
+  updateSideBrandMark();
+  applySidebarState();
 
   if (currentUser?.password_change_required) {
     openPasswordModal(true);
@@ -2559,6 +4684,10 @@ function renderAll() {
   renderEvents();
   renderAlerts();
 
+  if (canAdmin()) {
+    renderReceivers();
+  }
+
   if (canViewRules()) {
     renderRules();
   }
@@ -2598,8 +4727,16 @@ async function loadAll(options = {}) {
 
     if (canAdmin()) {
       baseRequests.push(fetchJson("/api/users"));
+      baseRequests.push(fetchJson("/api/receivers"));
+      baseRequests.push(fetchJson("/api/policy-groups"));
+      baseRequests.push(fetchJson("/api/parser-rules"));
+      baseRequests.push(fetchJson("/api/field-catalog"));
     } else {
       baseRequests.push(Promise.resolve({ users: [] }));
+      baseRequests.push(Promise.resolve({ receivers: [] }));
+      baseRequests.push(Promise.resolve({ policy_groups: [] }));
+      baseRequests.push(Promise.resolve({ parser_rules: [] }));
+      baseRequests.push(Promise.resolve({ catalog: { fields: [] } }));
     }
 
     const [
@@ -2608,7 +4745,11 @@ async function loadAll(options = {}) {
       alertsData,
       rulesData,
       dashboardsData,
-      usersData
+      usersData,
+      receiversData,
+      policyGroupsData,
+      parserRulesData,
+      fieldCatalogData
     ] = await Promise.all(baseRequests);
 
     stats = statsData || {};
@@ -2616,6 +4757,13 @@ async function loadAll(options = {}) {
     allAlerts = Array.isArray(alertsData.alerts) ? alertsData.alerts : [];
     allRules = Array.isArray(rulesData.rules) ? rulesData.rules : [];
     allUsers = Array.isArray(usersData.users) ? usersData.users : [];
+
+    allReceivers = Array.isArray(receiversData.receivers) ? receiversData.receivers : [];
+    allPolicyGroups = Array.isArray(policyGroupsData.policy_groups) ? policyGroupsData.policy_groups : [];
+    allParserRules = Array.isArray(parserRulesData.parser_rules) ? parserRulesData.parser_rules : [];
+    fieldCatalog = Array.isArray(fieldCatalogData.catalog?.fields)
+      ? fieldCatalogData.catalog.fields
+      : [];
 
     customDashboards = Array.isArray(dashboardsData.dashboards)
       ? dashboardsData.dashboards.map(normalizeDashboard)
@@ -2637,6 +4785,16 @@ async function loadAll(options = {}) {
     }
 
     renderAll();
+
+    if (selectedReceiverId) {
+      const stillExists = allReceivers.some((receiver) => receiver.id === selectedReceiverId);
+
+      if (stillExists) {
+        renderSelectedReceiverWorkspace();
+      } else {
+        closeReceiverSettings();
+      }
+    }
 
     setStatus(autoRefreshEnabled ? "Auto-refresh ON" : "Manual mode");
     touchUpdateTime();
@@ -3315,8 +5473,19 @@ function bindEvents() {
 
   refreshBtn.addEventListener("click", () => loadAll());
   autoRefreshBtn.addEventListener("click", toggleAutoRefresh);
-  themeToggleBtn.addEventListener("click", toggleTheme);
-  loginThemeToggleBtn.addEventListener("click", toggleTheme);
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", toggleTheme);
+  }
+
+  if (loginThemeToggleBtn) {
+    loginThemeToggleBtn.addEventListener("click", toggleTheme);
+  }
+
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener("click", toggleSidebar);
+  }
+
   clearOpenBtn.addEventListener("click", closeAllPanels);
   limitInput.addEventListener("change", () => loadAll());
 
@@ -3419,6 +5588,184 @@ function bindEvents() {
         widgetTitleInput.value = defaultWidgetTitles[widgetTypeInput.value] || "";
       }
     });
+  }
+
+  if (newReceiverBtn) {
+    newReceiverBtn.addEventListener("click", newReceiver);
+  }
+
+  if (deleteSelectedReceiverBtn) {
+    deleteSelectedReceiverBtn.addEventListener("click", () => {
+      deleteReceiver(selectedReceiverId);
+    });
+  }
+
+  if (openSelectedReceiverSettingsBtn) {
+    openSelectedReceiverSettingsBtn.addEventListener("click", () => {
+      openReceiverSettings(selectedReceiverId);
+    });
+  }
+
+  if (openReceiverSettingsInlineBtn) {
+    openReceiverSettingsInlineBtn.addEventListener("click", () => {
+      openReceiverSettings(selectedReceiverId);
+    });
+  }
+
+  if (closeReceiverSettingsBtn) {
+    closeReceiverSettingsBtn.addEventListener("click", closeReceiverSettings);
+  }
+
+  if (saveReceiverBtn) {
+    saveReceiverBtn.addEventListener("click", saveReceiver);
+  }
+
+  if (deleteReceiverBtn) {
+    deleteReceiverBtn.addEventListener("click", () => {
+      deleteReceiver(editingReceiverId || selectedReceiverId);
+    });
+  }
+
+  if (saveReceiverDashboardsBtn) {
+    saveReceiverDashboardsBtn.addEventListener("click", saveReceiverDashboards);
+  }
+
+  if (receiverTreeSearchInput) {
+    receiverTreeSearchInput.addEventListener("input", () => {
+      receiverTreeSearch = receiverTreeSearchInput.value || "";
+      renderReceivers();
+    });
+  }
+
+if (receiverParserStatusFilterInput) {
+  receiverParserStatusFilterInput.addEventListener("change", () => {
+    updateReceiverFilterStateFromInputs();
+    renderSelectedReceiverWorkspace();
+  });
+}
+
+if (receiverKqlFilterInput) {
+  receiverKqlFilterInput.addEventListener("input", () => {
+    updateReceiverFilterStateFromInputs();
+    renderSelectedReceiverWorkspace();
+  });
+}
+
+if (clearReceiverFiltersBtn) {
+  clearReceiverFiltersBtn.addEventListener("click", clearReceiverFilters);
+}
+
+  document.querySelectorAll(".receiver-settings-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activateReceiverSettingsTab(btn.dataset.receiverSettingsTab);
+    });
+  });
+
+  document.querySelectorAll(".receiver-dashboard-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activateReceiverDashboardTab(btn.dataset.receiverDashboardTab);
+    });
+  });
+
+[
+  receiverIdInput,
+  receiverEnabledInput,
+  receiverNameInput,
+  receiverRoleInput,
+  receiverParentInput,
+  receiverTypeInput,
+  receiverPathInput,
+  receiverFilePatternInput,
+  receiverRecursiveInput,
+  receiverSourceTypeInput,
+  receiverInitialPositionInput
+].forEach((input) => {
+    if (!input) return;
+    input.addEventListener("input", () => setReceiverMessage(""));
+    input.addEventListener("change", () => setReceiverMessage(""));
+  });
+
+  if (receiverPolicyGroupsList) {
+    receiverPolicyGroupsList.addEventListener("change", () => setReceiverMessage(""));
+  }
+
+  [
+    parserRuleIdInput,
+    parserRuleEnabledInput,
+    parserRuleNameInput,
+    parserPolicyGroupInput,
+    parserMatchTypeInput,
+    parserRawSampleInput,
+    parserPatternInput,
+    parserFieldOrderInput,
+    parserConstantEventCodeInput,
+    parserConstantEventNameInput,
+    parserConstantEventTypeInput,
+    parserConstantEventCategoryInput,
+    parserConstantEventActionInput,
+    parserConstantEventOutcomeInput,
+    parserConstantSeverityInput,
+    parserConstantVendorInput,
+    parserConstantProductInput
+  ].forEach((input) => {
+    if (!input) return;
+    input.addEventListener("input", updateParserRulePreviewForReceiver);
+    input.addEventListener("change", updateParserRulePreviewForReceiver);
+  });
+
+  if (parserReceiversList) {
+    parserReceiversList.addEventListener("change", updateParserRulePreviewForReceiver);
+  }
+
+  if (parserMatchTypeInput) {
+    parserMatchTypeInput.addEventListener("change", () => {
+      updateParserModeHintForReceiver();
+      currentParserExtracted = {};
+      currentParserMapping = {};
+
+      if (parserExtractedPreview) {
+        parserExtractedPreview.textContent = "No extraction test yet.";
+      }
+
+      renderParserMappingForReceiver();
+      updateParserRulePreviewForReceiver();
+    });
+  }
+
+  if (testParserRuleBtn) {
+    testParserRuleBtn.addEventListener("click", testParserRuleForReceiver);
+  }
+
+  if (copyParserRuleJsonBtn) {
+    copyParserRuleJsonBtn.addEventListener("click", copyParserRuleJsonForReceiver);
+  }
+
+  if (clearParserRuleFormBtn) {
+    clearParserRuleFormBtn.addEventListener("click", clearParserRuleFormForReceiver);
+  }
+
+  if (newParserRuleFromSettingsBtn) {
+    newParserRuleFromSettingsBtn.addEventListener("click", newParserRuleFromSettings);
+  }
+
+  if (deleteSelectedParserRuleBtn) {
+    deleteSelectedParserRuleBtn.addEventListener("click", deleteSelectedParserRuleFromSettings);
+  }
+
+  if (editSelectedParserRuleBtn) {
+    editSelectedParserRuleBtn.addEventListener("click", editSelectedParserRuleFromSettings);
+  }
+
+if (toggleSelectedParserRuleBtn) {
+  toggleSelectedParserRuleBtn.addEventListener("click", toggleSelectedParserRuleFromSettings);
+}
+
+  if (createParserRuleBtn) {
+    createParserRuleBtn.addEventListener("click", createParserRuleForReceiver);
+  }
+
+  if (updateParserRuleBtn) {
+    updateParserRuleBtn.addEventListener("click", updateParserRuleForReceiver);
   }
 
   bindRulePreviewEvents();
@@ -3743,6 +6090,18 @@ window.deleteRule = deleteRule;
 window.removeCondition = removeCondition;
 window.copyPreBlock = copyPreBlock;
 
+window.openReceiverSettings = openReceiverSettings;
+window.toggleParserRuleForSelectedReceiver = toggleParserRuleForSelectedReceiver;
+window.editParserRuleForReceiver = editParserRuleForReceiver;
+
+window.deleteParserRuleForReceiver = deleteParserRuleForReceiver;
+
+window.newParserRuleFromSettings = newParserRuleFromSettings;
+window.editSelectedParserRuleFromSettings = editSelectedParserRuleFromSettings;
+window.deleteSelectedParserRuleFromSettings = deleteSelectedParserRuleFromSettings;
+
+window.toggleSelectedParserRuleFromSettings = toggleSelectedParserRuleFromSettings;
+
 window.editCustomWidget = editCustomWidget;
 window.removeCustomWidget = removeCustomWidget;
 window.moveCustomWidget = moveCustomWidget;
@@ -3751,10 +6110,14 @@ window.selectCustomDashboard = selectCustomDashboard;
 window.duplicateDashboardById = duplicateDashboardById;
 
 applyTheme();
+applySidebarState();
+updateSideBrandMark();
 updateAutoRefreshUi();
 bindEvents();
 renderConditions();
+clearParserRuleFormForReceiver();
 activateTab("dashboard");
 activateDashboardMode(currentDashboardMode);
 updateRulePreview();
+updateParserRulePreviewForReceiver();
 checkAuth();

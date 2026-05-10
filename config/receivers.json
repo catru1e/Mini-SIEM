@@ -1,0 +1,70 @@
+[
+  {
+    "dashboard_ids": [],
+    "enabled": true,
+    "id": "recv_demo_auth",
+    "name": "Demo Auth Log",
+    "path": "logs/demo_auth.log",
+    "policy_group_ids": [
+      "pg_linux_auth"
+    ],
+    "source_type": "linux_log",
+    "type": "file"
+  },
+  {
+    "enabled": true,
+    "id": "recv_auth",
+    "name": "Linux Auth Log",
+    "path": "/var/log/auth.log",
+    "policy_group_ids": [
+      "pg_linux_auth"
+    ],
+    "source_type": "linux_log",
+    "type": "file"
+  },
+  {
+    "dashboard_ids": [],
+    "enabled": true,
+    "id": "recv_syslog",
+    "initial_position": "end",
+    "name": "Linux Syslog",
+    "parent_id": "",
+    "path": "/var/log/syslog",
+    "policy_group_ids": [
+      "pg_linux_system"
+    ],
+    "role": "receiver",
+    "source_type": "linux_log",
+    "type": "file"
+  },
+  {
+    "dashboard_ids": [],
+    "enabled": true,
+    "id": "recv_kern",
+    "initial_position": "end",
+    "name": "Linux Kernel Log",
+    "parent_id": "",
+    "path": "/var/log/kern.log",
+    "policy_group_ids": [
+      "pg_linux_kernel"
+    ],
+    "role": "receiver",
+    "source_type": "linux_log",
+    "type": "file"
+  },
+  {
+    "dashboard_ids": [],
+    "enabled": true,
+    "file_pattern": "*.log",
+    "id": "recv_web_custom_dir",
+    "initial_position": "beginning",
+    "name": "Web Custom Directory Logs",
+    "parent_id": "",
+    "path": "logs/custom_receiver",
+    "policy_group_ids": [],
+    "recursive": false,
+    "role": "receiver",
+    "source_type": "linux_log",
+    "type": "directory"
+  }
+]

@@ -14,6 +14,14 @@ struct DbEventRow {
   std::string source;
   std::string source_type;
   std::string severity;
+
+  std::string receiver_id;
+  std::string parser_status;
+  std::string parser_rule_id;
+  std::string policy_group_id;
+  std::string event_name;
+  std::string fields;
+
   std::string json;
 };
 

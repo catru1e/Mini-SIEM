@@ -153,6 +153,13 @@ void SqliteDb::init() {
   add_text_column_if_missing(db, "events", "event_id");
   add_text_column_if_missing(db, "events", "source_type");
 
+  add_text_column_if_missing(db, "events", "receiver_id");
+  add_text_column_if_missing(db, "events", "parser_status");
+  add_text_column_if_missing(db, "events", "parser_rule_id");
+  add_text_column_if_missing(db, "events", "policy_group_id");
+  add_text_column_if_missing(db, "events", "event_name");
+  add_text_column_if_missing(db, "events", "fields");
+
   sqlite3_close(db);
 }
 
@@ -172,6 +179,13 @@ void SqliteDb::insert_event(const std::string& event_id,
   std::string host = "unknown";
   std::string severity = "info";
 
+  std::string receiver_id;
+  std::string parser_status;
+  std::string parser_rule_id;
+  std::string policy_group_id;
+  std::string event_name;
+  std::string fields_json = "{}";
+
   try {
     auto j = json::parse(json_str);
 
@@ -181,13 +195,40 @@ void SqliteDb::insert_event(const std::string& event_id,
     if (j.contains("severity") && j["severity"].is_string()){
       severity = j["severity"].get<std::string>();
     }
+
+    if (j.contains("receiver_id") && j["receiver_id"].is_string()) {
+      receiver_id = j["receiver_id"].get<std::string>();
+    }
+
+    if (j.contains("parser_status") && j["parser_status"].is_string()) {
+      parser_status = j["parser_status"].get<std::string>();
+    }
+
+    if (j.contains("parser_rule_id") && j["parser_rule_id"].is_string()) {
+      parser_rule_id = j["parser_rule_id"].get<std::string>();
+    }
+
+    if (j.contains("policy_group_id") && j["policy_group_id"].is_string()) {
+      policy_group_id = j["policy_group_id"].get<std::string>();
+    }
+
+    if (j.contains("event_name") && j["event_name"].is_string()) {
+      event_name = j["event_name"].get<std::string>();
+    }
+
+    if (j.contains("fields") && j["fields"].is_object()) {
+      fields_json = j["fields"].dump();
+    }
+
   } catch (...) {
     //keep defaults if JSON parsing fails
   }
 
   const char* sql =
-    "INSERT INTO events(event_id,ts,received_at,host,event_type,source,source_type,severity,json) "
-    "VALUES(?,?,?,?,?,?,?,?,?);";
+    "INSERT INTO events("
+    "event_id,ts,received_at,host,event_type,source,source_type,severity,"
+    "receiver_id,parser_status,parser_rule_id,policy_group_id,event_name,fields,json"
+    ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
 
   sqlite3_stmt* stmt = nullptr;
 
@@ -202,7 +243,13 @@ void SqliteDb::insert_event(const std::string& event_id,
   sqlite3_bind_text(stmt, 6, source.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 7, source_type.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 8, severity.c_str(), -1, SQLITE_TRANSIENT);
-  sqlite3_bind_text(stmt, 9, json_str.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 9, receiver_id.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 10, parser_status.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 11, parser_rule_id.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 12, policy_group_id.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 13, event_name.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 14, fields_json.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 15, json_str.c_str(), -1, SQLITE_TRANSIENT);
 
   rc = sqlite3_step(stmt);
   throw_sqlite(rc, db, "sqlite3_step(insert)");
@@ -216,22 +263,40 @@ std::vector<DbEventRow> SqliteDb::get_last_events(int limit) {
 
   sqlite3* db = nullptr;
   int rc = sqlite3_open(db_path_.c_str(), &db);
-  throw_sqlite(rc, db, "sqlite3_open");
+  if (rc != SQLITE_OK) {
+    std::cerr << "[db][ERR] get_last_events sqlite3_open failed: "
+              << (db ? sqlite3_errmsg(db) : "unknown") << "\n";
+    if (db) sqlite3_close(db);
+    return {};
+  }
 
   sqlite3_busy_timeout(db, 5000);
 
+  // ВАЖНО: читаем только базовые колонки, которые точно есть.
+  // receiver/parser fields берем из json в server/main.cpp.
   const char* sql =
-	"SELECT id, event_id, ts, received_at, host, event_type, source, source_type, severity, json FROM events ORDER BY id DESC LIMIT ?;";
+    "SELECT id, event_id, ts, received_at, host, event_type, source, source_type, severity, json "
+    "FROM events "
+    "ORDER BY id DESC "
+    "LIMIT ?;";
+
   sqlite3_stmt* stmt = nullptr;
 
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
-  throw_sqlite(rc, db, "sqlite3_prepare_v2");
+  if (rc != SQLITE_OK) {
+    std::cerr << "[db][ERR] get_last_events prepare failed: "
+              << sqlite3_errmsg(db) << "\n";
+    sqlite3_close(db);
+    return {};
+  }
 
   sqlite3_bind_int(stmt, 1, limit);
 
   std::vector<DbEventRow> rows;
+
   while (true) {
     rc = sqlite3_step(stmt);
+
     if (rc == SQLITE_ROW) {
       DbEventRow r;
       r.id = sqlite3_column_int64(stmt, 0);
@@ -244,18 +309,28 @@ std::vector<DbEventRow> SqliteDb::get_last_events(int limit) {
       r.source_type = sqlite_text(stmt, 7);
       r.severity = sqlite_text(stmt, 8);
       r.json = sqlite_text(stmt, 9);
+
       rows.push_back(std::move(r));
       continue;
     }
-    if (rc == SQLITE_DONE) break;
-    throw_sqlite(rc, db, "sqlite3_step(select)");
+
+    if (rc == SQLITE_DONE) {
+      break;
+    }
+
+    std::cerr << "[db][ERR] get_last_events step failed: "
+              << sqlite3_errmsg(db) << "\n";
+    break;
   }
 
   sqlite3_finalize(stmt);
   sqlite3_close(db);
+
+  std::cerr << "[db] get_last_events rows=" << rows.size()
+            << " limit=" << limit << "\n";
+
   return rows;
 }
-
 
 // !!!!!!!!!!!!!!!!! ALERT PART !!!!!!!!!!!!!!!!!!!
 long long SqliteDb::count_auth_failed_by_src_ip_since(const std::string& src_ip, const std::string& since_ts) {
@@ -637,12 +712,79 @@ long long SqliteDb::count_events_by_field_since(const std::string& event_type,
       (c >= 'a' && c <= 'z') ||
       (c >= 'A' && c <= 'Z') ||
       (c >= '0' && c <= '9') ||
-      c == '_';
+      c == '_' ||
+      c == '.' ||
+      c == '-';
 
     if (!ok) {
       return 0;
     }
   }
+
+  std::string alias = field_name;
+
+  if (field_name == "source.ip") alias = "src_ip";
+  else if (field_name == "client.ip") alias = "src_ip";
+  else if (field_name == "observer.ip") alias = "src_ip";
+
+  else if (field_name == "source.port") alias = "src_port";
+  else if (field_name == "client.port") alias = "src_port";
+
+  else if (field_name == "destination.ip") alias = "dst_ip";
+  else if (field_name == "server.ip") alias = "dst_ip";
+
+  else if (field_name == "destination.port") alias = "dst_port";
+  else if (field_name == "server.port") alias = "dst_port";
+
+  else if (field_name == "user.name") alias = "user";
+  else if (field_name == "source.user.name") alias = "user";
+  else if (field_name == "destination.user.name") alias = "user";
+  else if (field_name == "account.name") alias = "user";
+  else if (field_name == "actor.name") alias = "user";
+
+  else if (field_name == "process.name") alias = "process_name";
+  else if (field_name == "process.executable") alias = "process_name";
+  else if (field_name == "syslog.identifier") alias = "program";
+
+  else if (field_name == "process.pid") alias = "pid";
+  else if (field_name == "syslog.pid") alias = "pid";
+
+  else if (field_name == "process.command_line") alias = "command";
+  else if (field_name == "auth.sudo.command") alias = "command";
+
+  else if (field_name == "file.path") alias = "path";
+  else if (field_name == "file.target_path") alias = "path";
+  else if (field_name == "registry.path") alias = "path";
+
+  else if (field_name == "network.protocol") alias = "protocol";
+  else if (field_name == "auth.protocol") alias = "protocol";
+
+  else if (field_name == "event.name") alias = "event_name";
+  else if (field_name == "event.code") alias = "event_code";
+  else if (field_name == "event.type") alias = "event_type";
+  else if (field_name == "event.category") alias = "event_category";
+  else if (field_name == "event.action") alias = "event_action";
+  else if (field_name == "event.outcome") alias = "event_outcome";
+  else if (field_name == "event.severity") alias = "severity";
+
+  else if (field_name == "host.name") alias = "host";
+  else if (field_name == "host.hostname") alias = "host";
+
+  else if (field_name == "service.name") alias = "service";
+  else if (field_name == "pam.service") alias = "service";
+
+  else if (field_name == "linux.kernel.error_code") alias = "error_code";
+  else if (field_name == "event.error_code") alias = "error_code";
+
+  else if (field_name == "url.original") alias = "url";
+  else if (field_name == "dns.question.name") alias = "domain";
+
+  else if (field_name == "threat.name") alias = "threat_name";
+  else if (field_name == "malware.name") alias = "threat_name";
+
+  const std::string direct_path = "$.\"" + field_name + "\"";
+  const std::string fields_path = "$.fields.\"" + field_name + "\"";
+  const std::string alias_path = "$.\"" + alias + "\"";
 
   sqlite3* db = nullptr;
   int rc = sqlite3_open(db_path_.c_str(), &db);
@@ -655,9 +797,11 @@ long long SqliteDb::count_events_by_field_since(const std::string& event_type,
     "FROM events "
     "WHERE event_type = ? "
     "AND ts >= ? "
-    "AND json_extract(json, ?) = ?;";
-
-  const std::string json_path = "$." + field_name;
+    "AND ("
+      "json_extract(json, ?) = ? "
+      "OR json_extract(json, ?) = ? "
+      "OR json_extract(json, ?) = ?"
+    ");";
 
   sqlite3_stmt* stmt = nullptr;
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
@@ -665,8 +809,15 @@ long long SqliteDb::count_events_by_field_since(const std::string& event_type,
 
   sqlite3_bind_text(stmt, 1, event_type.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 2, since_ts.c_str(), -1, SQLITE_TRANSIENT);
-  sqlite3_bind_text(stmt, 3, json_path.c_str(), -1, SQLITE_TRANSIENT);
+
+  sqlite3_bind_text(stmt, 3, direct_path.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 4, field_value.c_str(), -1, SQLITE_TRANSIENT);
+
+  sqlite3_bind_text(stmt, 5, fields_path.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 6, field_value.c_str(), -1, SQLITE_TRANSIENT);
+
+  sqlite3_bind_text(stmt, 7, alias_path.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 8, field_value.c_str(), -1, SQLITE_TRANSIENT);
 
   rc = sqlite3_step(stmt);
   if (rc != SQLITE_ROW) {

@@ -13,6 +13,7 @@
 #include <memory>
 #include <random>
 #include <cstdlib>
+#include <regex>
 
 #include "httplib.h"
 #include "json.hpp"
@@ -232,6 +233,660 @@ static int find_rule_index_by_id(const json& rules, const std::string& id) {
   }
 
   return -1;
+}
+
+static json default_array_root() {
+  return json::array();
+}
+
+static bool ensure_array_file(const std::string& path, std::string& err) {
+  if (std::filesystem::exists(path)) return true;
+  return write_json_file(path, json::array(), err);
+}
+
+static int find_json_item_index_by_id(const json& arr, const std::string& id) {
+  if (!arr.is_array()) return -1;
+
+  for (std::size_t i = 0; i < arr.size(); ++i) {
+    const auto& item = arr[i];
+
+    if (!item.is_object()) continue;
+    if (!item.contains("id") || !item["id"].is_string()) continue;
+
+    if (item["id"].get<std::string>() == id) {
+      return static_cast<int>(i);
+    }
+  }
+
+  return -1;
+}
+
+static bool json_string_array_contains(const json& arr, const std::string& value) {
+  if (!arr.is_array()) return false;
+
+  for (const auto& item : arr) {
+    if (item.is_string() && item.get<std::string>() == value) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool validate_receiver_json(const json& receiver, std::string& err) {
+  if (!receiver.is_object()) {
+    err = "receiver must be JSON object";
+    return false;
+  }
+
+  if (!receiver.contains("id") || !receiver["id"].is_string() || receiver["id"].get<std::string>().empty()) {
+    err = "receiver.id must be non-empty string";
+    return false;
+  }
+
+  if (!receiver.contains("name") || !receiver["name"].is_string() || receiver["name"].get<std::string>().empty()) {
+    err = "receiver.name must be non-empty string";
+    return false;
+  }
+
+  if (!receiver.contains("type") || !receiver["type"].is_string()) {
+    err = "receiver.type must be string";
+    return false;
+  }
+
+  const std::string type = receiver["type"].get<std::string>();
+
+  if (type != "file" && type != "directory") {
+    err = "receiver.type must be file or directory";
+    return false;
+  }
+
+  const std::string role =
+    receiver.contains("role") && receiver["role"].is_string()
+      ? receiver["role"].get<std::string>()
+      : "receiver";
+
+  if (role != "esm" && role != "erc" && role != "receiver" && role != "device") {
+    err = "receiver.role must be esm, erc, receiver or device";
+    return false;
+  }
+
+  if (receiver.contains("parent_id") && !receiver["parent_id"].is_string()) {
+    err = "receiver.parent_id must be string";
+    return false;
+  }
+
+  if (!receiver.contains("path") || !receiver["path"].is_string()) {
+    err = "receiver.path must be string";
+    return false;
+  }
+
+  if ((role == "receiver" || role == "device") && receiver["path"].get<std::string>().empty()) {
+    err = "receiver.path must be non-empty for receiver/device";
+    return false;
+  }
+
+  if (receiver.contains("dashboard_ids") && !receiver["dashboard_ids"].is_array()) {
+    err = "receiver.dashboard_ids must be array";
+    return false;
+  }
+
+  if (receiver.contains("enabled") && !receiver["enabled"].is_boolean()) {
+    err = "receiver.enabled must be boolean";
+    return false;
+  }
+
+  if (receiver.contains("policy_group_ids") && !receiver["policy_group_ids"].is_array()) {
+    err = "receiver.policy_group_ids must be array";
+    return false;
+  }
+
+  if (receiver.contains("file_pattern") && !receiver["file_pattern"].is_string()) {
+    err = "receiver.file_pattern must be string";
+    return false;
+  }
+
+  if (receiver.contains("recursive") && !receiver["recursive"].is_boolean()) {
+    err = "receiver.recursive must be boolean";
+    return false;
+  }
+
+  return true;
+}
+
+static bool validate_policy_group_json(const json& group, std::string& err) {
+  if (!group.is_object()) {
+    err = "policy group must be JSON object";
+    return false;
+  }
+
+  if (!group.contains("id") || !group["id"].is_string() || group["id"].get<std::string>().empty()) {
+    err = "policy_group.id must be non-empty string";
+    return false;
+  }
+
+  if (!group.contains("name") || !group["name"].is_string() || group["name"].get<std::string>().empty()) {
+    err = "policy_group.name must be non-empty string";
+    return false;
+  }
+
+  if (group.contains("enabled") && !group["enabled"].is_boolean()) {
+    err = "policy_group.enabled must be boolean";
+    return false;
+  }
+
+  return true;
+}
+
+static bool validate_parser_rule_json(const json& rule, std::string& err) {
+  if (!rule.is_object()) {
+    err = "parser rule must be JSON object";
+    return false;
+  }
+
+  if (!rule.contains("id") || !rule["id"].is_string() || rule["id"].get<std::string>().empty()) {
+    err = "parser_rule.id must be non-empty string";
+    return false;
+  }
+
+  if (!rule.contains("name") || !rule["name"].is_string() || rule["name"].get<std::string>().empty()) {
+    err = "parser_rule.name must be non-empty string";
+    return false;
+  }
+
+  if (!rule.contains("policy_group_id") || !rule["policy_group_id"].is_string()) {
+    err = "parser_rule.policy_group_id must be string";
+    return false;
+  }
+
+  if (rule.contains("enabled") && !rule["enabled"].is_boolean()) {
+    err = "parser_rule.enabled must be boolean";
+    return false;
+  }
+
+  if (!rule.contains("match_type") || !rule["match_type"].is_string()) {
+    err = "parser_rule.match_type must be string";
+    return false;
+  }
+
+  const std::string match_type = rule["match_type"].get<std::string>();
+
+  if (match_type != "regex" && match_type != "json") {
+    err = "parser_rule.match_type must be regex or json";
+    return false;
+  }
+
+  if (match_type == "regex") {
+    if (!rule.contains("pattern") || !rule["pattern"].is_string() || rule["pattern"].get<std::string>().empty()) {
+      err = "regex parser_rule.pattern must be non-empty string";
+      return false;
+    }
+
+    if (!rule.contains("field_order") || !rule["field_order"].is_array()) {
+      err = "regex parser_rule.field_order must be array";
+      return false;
+    }
+  }
+
+  if (match_type == "json") {
+    if (rule.contains("json_paths") && !rule["json_paths"].is_object()) {
+      err = "json parser_rule.json_paths must be object";
+      return false;
+    }
+  }
+
+  if (!rule.contains("field_mapping") || !rule["field_mapping"].is_object()) {
+    err = "parser_rule.field_mapping must be object";
+    return false;
+  }
+
+  if (!rule.contains("constants") || !rule["constants"].is_object()) {
+    err = "parser_rule.constants must be object";
+    return false;
+  }
+
+  if (!rule.contains("enabled_receivers") || !rule["enabled_receivers"].is_array()) {
+    err = "parser_rule.enabled_receivers must be array";
+    return false;
+  }
+
+  return true;
+}
+
+static json load_json_array_file_or_empty(const std::string& path) {
+  json arr;
+  std::string err;
+
+  if (!ensure_array_file(path, err)) {
+    return json::array();
+  }
+
+  if (!read_json_file(path, arr, err)) {
+    return json::array();
+  }
+
+  if (!arr.is_array()) {
+    return json::array();
+  }
+
+  return arr;
+}
+
+static json extract_regex_fields(const std::string& raw,
+                                 const std::string& pattern,
+                                 const json& field_order,
+                                 bool& matched,
+                                 std::string& err) {
+  matched = false;
+  json fields = json::object();
+
+  try {
+    std::regex re(pattern);
+    std::smatch match;
+
+    if (!std::regex_search(raw, match, re)) {
+      return fields;
+    }
+
+    matched = true;
+
+    for (std::size_t i = 0; i < field_order.size(); ++i) {
+      if (!field_order[i].is_string()) continue;
+
+      const std::size_t match_index = i + 1;
+      const std::string field_name = field_order[i].get<std::string>();
+
+      if (match_index < match.size()) {
+        fields[field_name] = match[match_index].str();
+      } else {
+        fields[field_name] = "";
+      }
+    }
+
+    return fields;
+  } catch (const std::exception& e) {
+    err = e.what();
+    return fields;
+  }
+}
+
+static std::string parser_json_value_to_string(const json& value) {
+  if (value.is_null()) return "";
+  if (value.is_string()) return value.get<std::string>();
+  if (value.is_boolean()) return value.get<bool>() ? "true" : "false";
+  if (value.is_number_integer()) return std::to_string(value.get<long long>());
+  if (value.is_number_unsigned()) return std::to_string(value.get<unsigned long long>());
+  if (value.is_number_float()) return std::to_string(value.get<double>());
+  return value.dump();
+}
+
+static void flatten_json_fields(const json& value,
+                                const std::string& prefix,
+                                json& out) {
+  if (value.is_object()) {
+    for (auto it = value.begin(); it != value.end(); ++it) {
+      const std::string key = prefix.empty()
+        ? it.key()
+        : prefix + "." + it.key();
+
+      flatten_json_fields(it.value(), key, out);
+    }
+
+    return;
+  }
+
+  if (value.is_array()) {
+    out[prefix] = value.dump();
+    return;
+  }
+
+  if (!prefix.empty()) {
+    out[prefix] = parser_json_value_to_string(value);
+  }
+}
+
+static std::string normalize_json_path(std::string path) {
+  if (path.rfind("$.", 0) == 0) {
+    path = path.substr(2);
+  } else if (path == "$") {
+    path.clear();
+  }
+
+  return path;
+}
+
+static bool get_json_dot_path(const json& root,
+                              const std::string& raw_path,
+                              json& out) {
+  std::string path = normalize_json_path(raw_path);
+
+  if (path.empty()) {
+    out = root;
+    return true;
+  }
+
+  const json* current = &root;
+  std::size_t start = 0;
+
+  while (start < path.size()) {
+    const std::size_t dot = path.find('.', start);
+    const std::string part = path.substr(
+      start,
+      dot == std::string::npos ? std::string::npos : dot - start
+    );
+
+    if (part.empty()) {
+      return false;
+    }
+
+    if (current->is_object()) {
+      if (!current->contains(part)) {
+        return false;
+      }
+
+      current = &((*current)[part]);
+    } else if (current->is_array()) {
+      try {
+        const std::size_t index = static_cast<std::size_t>(std::stoul(part));
+
+        if (index >= current->size()) {
+          return false;
+        }
+
+        current = &((*current)[index]);
+      } catch (...) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+
+    if (dot == std::string::npos) {
+      out = *current;
+      return true;
+    }
+
+    start = dot + 1;
+  }
+
+  return false;
+}
+
+static json extract_json_fields(const std::string& raw,
+                                const json& json_paths,
+                                bool& matched,
+                                std::string& err) {
+  matched = false;
+  json fields = json::object();
+
+  try {
+    json root = json::parse(raw);
+
+    if (!root.is_object()) {
+      err = "raw JSON must be an object";
+      return fields;
+    }
+
+    matched = true;
+
+    if (json_paths.is_object() && !json_paths.empty()) {
+      for (auto it = json_paths.begin(); it != json_paths.end(); ++it) {
+        const std::string output_name = it.key();
+
+        if (!it.value().is_string()) {
+          continue;
+        }
+
+        const std::string path = it.value().get<std::string>();
+
+        json value;
+        if (get_json_dot_path(root, path, value)) {
+          fields[output_name] = parser_json_value_to_string(value);
+        } else {
+          fields[output_name] = "";
+        }
+      }
+
+      return fields;
+    }
+
+    flatten_json_fields(root, "", fields);
+    return fields;
+  } catch (const std::exception& e) {
+    err = e.what();
+    return fields;
+  }
+}
+
+static std::string resolve_mapping_value(const std::string& value, const json& extracted) {
+  if (value.size() >= 2 && value[0] == '$') {
+    const std::string key = value.substr(1);
+
+    if (extracted.contains(key)) {
+      if (extracted[key].is_string()) return extracted[key].get<std::string>();
+      return extracted[key].dump();
+    }
+
+    return "";
+  }
+
+  return value;
+}
+
+static void set_alias_field(json& event, const std::string& target_field, const std::string& value) {
+  if (value.empty()) return;
+
+  // Always keep direct flat field too.
+  // This lets rules use both "source.ip" and aliases like "src_ip".
+  event[target_field] = value;
+
+  if (target_field == "user.name" ||
+      target_field == "source.user.name" ||
+      target_field == "destination.user.name" ||
+      target_field == "account.name" ||
+      target_field == "actor.name") {
+    event["user"] = value;
+  }
+
+  if (target_field == "source.ip" ||
+      target_field == "client.ip" ||
+      target_field == "observer.ip") {
+    event["src_ip"] = value;
+    event["ip"] = value;
+  }
+
+  if (target_field == "destination.ip" ||
+      target_field == "server.ip") {
+    event["dst_ip"] = value;
+  }
+
+  if (target_field == "source.port" ||
+      target_field == "client.port") {
+    event["src_port"] = value;
+    event["port"] = value;
+  }
+
+  if (target_field == "destination.port" ||
+      target_field == "server.port") {
+    event["dst_port"] = value;
+  }
+
+  if (target_field == "process.name" ||
+      target_field == "process.executable" ||
+      target_field == "syslog.identifier" ||
+      target_field == "program") {
+    event["process_name"] = value;
+    event["program"] = value;
+  }
+
+  if (target_field == "process.pid" ||
+      target_field == "syslog.pid") {
+    event["pid"] = value;
+  }
+
+  if (target_field == "process.command_line" ||
+      target_field == "auth.sudo.command") {
+    event["command"] = value;
+    event["cmdline"] = value;
+  }
+
+  if (target_field == "file.path" ||
+      target_field == "file.target_path" ||
+      target_field == "registry.path") {
+    event["path"] = value;
+  }
+
+  if (target_field == "network.protocol" ||
+      target_field == "auth.protocol") {
+    event["protocol"] = value;
+  }
+
+  if (target_field == "event.name") {
+    event["event_name"] = value;
+  }
+
+  if (target_field == "event.code") {
+    event["event_code"] = value;
+  }
+
+  if (target_field == "event.type") {
+    event["event_type"] = value;
+  }
+
+  if (target_field == "event.category") {
+    event["event_category"] = value;
+  }
+
+  if (target_field == "event.action") {
+    event["event_action"] = value;
+  }
+
+  if (target_field == "event.outcome") {
+    event["event_outcome"] = value;
+  }
+
+  if (target_field == "event.severity") {
+    event["severity"] = value;
+  }
+
+  if (target_field == "host.name" ||
+      target_field == "host.hostname") {
+    event["host"] = value;
+  }
+
+  if (target_field == "service.name" ||
+      target_field == "pam.service") {
+    event["service"] = value;
+  }
+
+  if (target_field == "linux.kernel.error_code" ||
+      target_field == "event.error_code") {
+    event["error_code"] = value;
+  }
+
+  if (target_field == "url.original") {
+    event["url"] = value;
+  }
+
+  if (target_field == "dns.question.name") {
+    event["domain"] = value;
+  }
+
+  if (target_field == "threat.name" ||
+      target_field == "malware.name") {
+    event["threat_name"] = value;
+  }
+}
+
+static bool apply_parser_rules(json& event, const std::string& parser_rules_path) {
+  const std::string raw = safe_string(event, "raw", "");
+  const std::string receiver_id = safe_string(event, "receiver_id", "");
+
+  event["parser_status"] = "unparsed";
+
+  if (safe_string(event, "event_type", "").empty()) {
+    event["event_type"] = "unknown_event";
+  }
+
+  if (safe_string(event, "severity", "").empty()) {
+    event["severity"] = "info";
+  }
+
+  if (raw.empty() || receiver_id.empty()) {
+    return false;
+  }
+
+  const json rules = load_json_array_file_or_empty(parser_rules_path);
+
+  for (const auto& rule : rules) {
+    if (!rule.is_object()) continue;
+    if (rule.value("enabled", true) == false) continue;
+
+    if (!rule.contains("enabled_receivers") ||
+        !json_string_array_contains(rule["enabled_receivers"], receiver_id)) {
+      continue;
+    }
+
+    const std::string match_type = safe_string(rule, "match_type", "regex");
+
+    bool matched = false;
+    json extracted = json::object();
+    std::string err;
+
+    if (match_type == "regex") {
+      extracted = extract_regex_fields(
+        raw,
+        safe_string(rule, "pattern", ""),
+        rule.value("field_order", json::array()),
+        matched,
+        err
+      );
+    } else if (match_type == "json") {
+        extracted = extract_json_fields(
+        raw,
+        rule.value("json_paths", json::object()),
+        matched,
+        err
+      );
+    }
+
+    if (!matched) {
+      continue;
+    }
+
+    json fields = json::object();
+
+    const json mapping = rule.value("field_mapping", json::object());
+    for (auto it = mapping.begin(); it != mapping.end(); ++it) {
+      const std::string target_field = it.key();
+      const std::string source_expr = it.value().is_string() ? it.value().get<std::string>() : it.value().dump();
+      const std::string mapped_value = resolve_mapping_value(source_expr, extracted);
+
+      fields[target_field] = mapped_value;
+      set_alias_field(event, target_field, mapped_value);
+    }
+
+    const json constants = rule.value("constants", json::object());
+    for (auto it = constants.begin(); it != constants.end(); ++it) {
+      event[it.key()] = it.value();
+    }
+
+    event["fields"] = fields;
+    event["extracted"] = extracted;
+    event["parser_status"] = "parsed";
+    event["parser_rule_id"] = safe_string(rule, "id", "");
+    event["parser_rule_name"] = safe_string(rule, "name", "");
+    event["policy_group_id"] = safe_string(rule, "policy_group_id", "");
+
+    return true;
+  }
+
+  event["event_type"] = "unknown_event";
+  event["event_name"] = "Unknown Event";
+  event["severity"] = "info";
+  event["fields"] = json::object();
+
+  return false;
 }
 
 static std::string make_dashboard_id(const std::string& title) {
@@ -1037,6 +1692,413 @@ srv.Post("/api/auth/change-password", [&](const httplib::Request& req, httplib::
     const std::string rules_path = "config/rules.json";
     std::mutex rules_file_mutex;
 
+    const std::string receivers_path = "config/receivers.json";
+    const std::string policy_groups_path = "config/policy_groups.json";
+    const std::string parser_rules_path = "config/parser_rules.json";
+    const std::string field_catalog_path = "config/field_catalog.json";
+
+    std::mutex receivers_file_mutex;
+    std::mutex policy_groups_file_mutex;
+    std::mutex parser_rules_file_mutex;
+
+    auto handle_get_array_file = [&](const httplib::Request& req,
+                                     httplib::Response& res,
+                                     const std::string& path,
+                                     std::mutex& file_mutex,
+                                     const std::string& response_key) {
+      AuthSession session;
+      if (!require_role(req, res, "analyst", session)) return;
+
+      std::lock_guard<std::mutex> lock(file_mutex);
+
+      json arr;
+      std::string err;
+
+      if (!ensure_array_file(path, err)) {
+        send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+        return;
+      }
+
+      if (!read_json_file(path, arr, err)) {
+        send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+        return;
+      }
+
+      if (!arr.is_array()) {
+        send_json_response(res, 500, {{"status", "error"}, {"message", path + " must contain JSON array"}});
+        return;
+      }
+
+      send_json_response(res, 200, {
+        {"status", "ok"},
+        {"count", arr.size()},
+        {response_key, arr}
+      });
+    };
+
+    auto handle_create_array_item = [&](const httplib::Request& req,
+                                        httplib::Response& res,
+                                        const std::string& path,
+                                        std::mutex& file_mutex,
+                                        const std::string& response_key,
+                                        auto validator) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      std::lock_guard<std::mutex> lock(file_mutex);
+
+      try {
+        json item = json::parse(req.body);
+
+        std::string err;
+        if (!validator(item, err)) {
+          send_json_response(res, 400, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        json arr;
+
+        if (!ensure_array_file(path, err)) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        if (!read_json_file(path, arr, err)) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        if (!arr.is_array()) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", path + " must contain JSON array"}});
+          return;
+        }
+
+        const std::string id = item["id"].get<std::string>();
+
+        if (find_json_item_index_by_id(arr, id) >= 0) {
+          send_json_response(res, 409, {
+            {"status", "error"},
+            {"message", "item already exists"},
+            {"id", id}
+          });
+          return;
+        }
+
+        arr.push_back(item);
+
+        if (!write_json_file(path, arr, err)) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        send_json_response(res, 201, {
+          {"status", "ok"},
+          {"action", "created"},
+          {"id", id},
+          {response_key, item}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {{"status", "error"}, {"message", e.what()}});
+      }
+    };
+
+    auto handle_update_array_item = [&](const httplib::Request& req,
+                                        httplib::Response& res,
+                                        const std::string& path,
+                                        std::mutex& file_mutex,
+                                        const std::string& response_key,
+                                        auto validator) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      std::lock_guard<std::mutex> lock(file_mutex);
+
+      try {
+        const std::string id = req.matches[1].str();
+
+        json item = json::parse(req.body);
+        item["id"] = id;
+
+        std::string err;
+        if (!validator(item, err)) {
+          send_json_response(res, 400, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        json arr;
+
+        if (!read_json_file(path, arr, err)) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        if (!arr.is_array()) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", path + " must contain JSON array"}});
+          return;
+        }
+
+        const int index = find_json_item_index_by_id(arr, id);
+
+        if (index < 0) {
+          send_json_response(res, 404, {
+            {"status", "error"},
+            {"message", "item not found"},
+            {"id", id}
+          });
+          return;
+        }
+
+        arr[static_cast<std::size_t>(index)] = item;
+
+        if (!write_json_file(path, arr, err)) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "updated"},
+          {"id", id},
+          {response_key, item}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {{"status", "error"}, {"message", e.what()}});
+      }
+    };
+
+    auto handle_delete_array_item = [&](const httplib::Request& req,
+                                        httplib::Response& res,
+                                        const std::string& path,
+                                        std::mutex& file_mutex,
+                                        const std::string& response_key) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      std::lock_guard<std::mutex> lock(file_mutex);
+
+      try {
+        const std::string id = req.matches[1].str();
+
+        json arr;
+        std::string err;
+
+        if (!read_json_file(path, arr, err)) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        if (!arr.is_array()) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", path + " must contain JSON array"}});
+          return;
+        }
+
+        const int index = find_json_item_index_by_id(arr, id);
+
+        if (index < 0) {
+          send_json_response(res, 404, {
+            {"status", "error"},
+            {"message", "item not found"},
+            {"id", id}
+          });
+          return;
+        }
+
+        json removed = arr[static_cast<std::size_t>(index)];
+        arr.erase(arr.begin() + index);
+
+        if (!write_json_file(path, arr, err)) {
+          send_json_response(res, 500, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"action", "deleted"},
+          {"id", id},
+          {response_key, removed}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {{"status", "error"}, {"message", e.what()}});
+      }
+    };
+
+    // Field Catalog API
+    srv.Get("/api/field-catalog", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "analyst", session)) return;
+
+      json catalog;
+      std::string err;
+
+      if (!read_json_file(field_catalog_path, catalog, err)) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", err}
+        });
+        return;
+      }
+
+      if (!catalog.is_object()) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", "field catalog must be JSON object"}
+        });
+        return;
+      }
+
+      if (!catalog.contains("fields") || !catalog["fields"].is_array()) {
+        send_json_response(res, 500, {
+          {"status", "error"},
+          {"message", "field catalog must contain fields array"}
+        });
+        return;
+      }
+
+      send_json_response(res, 200, {
+        {"status", "ok"},
+        {"catalog", catalog}
+      });
+    });
+
+    // Receivers API
+    srv.Get("/api/receivers", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_get_array_file(req, res, receivers_path, receivers_file_mutex, "receivers");
+    });
+
+    srv.Post("/api/receivers", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_create_array_item(req, res, receivers_path, receivers_file_mutex, "receiver", validate_receiver_json);
+    });
+
+    srv.Put(R"(/api/receivers/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_update_array_item(req, res, receivers_path, receivers_file_mutex, "receiver", validate_receiver_json);
+    });
+
+    srv.Delete(R"(/api/receivers/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_delete_array_item(req, res, receivers_path, receivers_file_mutex, "receiver");
+    });
+
+    // Policy Groups API
+    srv.Get("/api/policy-groups", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_get_array_file(req, res, policy_groups_path, policy_groups_file_mutex, "policy_groups");
+    });
+
+    srv.Post("/api/policy-groups", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_create_array_item(req, res, policy_groups_path, policy_groups_file_mutex, "policy_group", validate_policy_group_json);
+    });
+
+    srv.Put(R"(/api/policy-groups/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_update_array_item(req, res, policy_groups_path, policy_groups_file_mutex, "policy_group", validate_policy_group_json);
+    });
+
+    srv.Delete(R"(/api/policy-groups/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_delete_array_item(req, res, policy_groups_path, policy_groups_file_mutex, "policy_group");
+    });
+
+    // Parser Rules API
+    srv.Get("/api/parser-rules", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_get_array_file(req, res, parser_rules_path, parser_rules_file_mutex, "parser_rules");
+    });
+
+    srv.Post("/api/parser-rules", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_create_array_item(req, res, parser_rules_path, parser_rules_file_mutex, "parser_rule", validate_parser_rule_json);
+    });
+
+    srv.Put(R"(/api/parser-rules/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_update_array_item(req, res, parser_rules_path, parser_rules_file_mutex, "parser_rule", validate_parser_rule_json);
+    });
+
+    srv.Delete(R"(/api/parser-rules/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+      handle_delete_array_item(req, res, parser_rules_path, parser_rules_file_mutex, "parser_rule");
+    });
+
+    srv.Post("/api/parser-rules/test", [&](const httplib::Request& req, httplib::Response& res) {
+      AuthSession session;
+      if (!require_role(req, res, "admin", session)) return;
+
+      try {
+        json body = json::parse(req.body);
+
+        json rule = body.value("rule", json::object());
+        std::string raw = safe_string(body, "raw", "");
+
+        if (raw.empty()) {
+          raw = safe_string(rule, "sample_raw", "");
+        }
+
+        std::string err;
+        if (!validate_parser_rule_json(rule, err)) {
+          send_json_response(res, 400, {{"status", "error"}, {"message", err}});
+          return;
+        }
+
+        bool matched = false;
+        json extracted = json::object();
+
+        const std::string test_match_type = safe_string(rule, "match_type", "regex");
+
+        if (test_match_type == "regex") {
+          extracted = extract_regex_fields(
+            raw,
+   	    safe_string(rule, "pattern", ""),
+   	    rule.value("field_order", json::array()),
+   	    matched,
+  	    err
+ 	   );
+	} else if (test_match_type == "json") {
+  	  extracted = extract_json_fields(
+  	    raw,
+ 	    rule.value("json_paths", json::object()),
+	    matched,
+   	    err
+  	  );
+	}
+
+        json preview_event = {
+          {"raw", raw},
+          {"receiver_id", "__test__"},
+          {"event_type", "unknown_event"},
+          {"parser_status", "unparsed"},
+          {"severity", "info"}
+        };
+
+        if (matched) {
+          json fields = json::object();
+
+          const json mapping = rule.value("field_mapping", json::object());
+          for (auto it = mapping.begin(); it != mapping.end(); ++it) {
+            const std::string target_field = it.key();
+            const std::string source_expr = it.value().is_string() ? it.value().get<std::string>() : it.value().dump();
+            const std::string mapped_value = resolve_mapping_value(source_expr, extracted);
+
+            fields[target_field] = mapped_value;
+            set_alias_field(preview_event, target_field, mapped_value);
+          }
+
+          const json constants = rule.value("constants", json::object());
+          for (auto it = constants.begin(); it != constants.end(); ++it) {
+            preview_event[it.key()] = it.value();
+          }
+
+          preview_event["fields"] = fields;
+          preview_event["extracted"] = extracted;
+          preview_event["parser_status"] = "parsed";
+          preview_event["parser_rule_id"] = safe_string(rule, "id", "");
+          preview_event["parser_rule_name"] = safe_string(rule, "name", "");
+          preview_event["policy_group_id"] = safe_string(rule, "policy_group_id", "");
+        }
+
+        send_json_response(res, 200, {
+          {"status", "ok"},
+          {"matched", matched},
+          {"extracted", extracted},
+          {"event_preview", preview_event},
+          {"error", err}
+        });
+      } catch (const std::exception& e) {
+        send_json_response(res, 400, {{"status", "error"}, {"message", e.what()}});
+      }
+    });
+
     // Rules API
     srv.Get("/api/rules", [&](const httplib::Request& req, httplib::Response& res) {
       AuthSession session;
@@ -1656,6 +2718,12 @@ srv.Post("/api/auth/change-password", [&](const httplib::Request& req, httplib::
         }
         j["source_type"] = source_type;
 
+        if (j.contains("receiver_id") && j["receiver_id"].is_string()) {
+          apply_parser_rules(j, parser_rules_path);
+        } else if (!j.contains("parser_status")) {
+          j["parser_status"] = "built_in";
+        }
+
         ts = safe_string(j, "ts", received_at);
         event_type = safe_string(j, "event_type", "unknown");
         source = safe_string(j, "source", "unknown");
@@ -1668,6 +2736,22 @@ srv.Post("/api/auth/change-password", [&](const httplib::Request& req, httplib::
 	broadcast_sse("event", make_event_response_item(0, j));
 
 	try {
+          const std::string parser_status = safe_string(j, "parser_status", "built_in");
+
+          if (parser_status == "unparsed") {
+            json out = {
+              {"status", "ok"},
+              {"event_id", event_id},
+              {"received_at", received_at},
+              {"source_type", source_type},
+              {"parser_status", parser_status}
+            };
+
+            res.set_content(out.dump(), "application/json");
+            res.status = 200;
+            return;
+          }
+
 	  auto detected_alerts = detector.process_event(j);
 	  for (const auto& alert : detected_alerts){
 	    db.insert_alert(
@@ -1811,18 +2895,28 @@ srv.Post("/api/auth/change-password", [&](const httplib::Request& req, httplib::
           original = json::object({{"raw_json", r.json}});
         }
 
-        json item = {
-          {"id", r.id},
-          {"event_id", r.event_id},
-          {"ts", r.ts},
-	  {"received_at", r.received_at},
-	  {"host", r.host},
-          {"event_type", r.event_type},
-          {"source", r.source},
-          {"source_type", r.source_type},
-	  {"severity", r.severity},
-          {"event", original}
-        };
+	json item = {
+ 	  {"id", r.id},
+ 	  {"event_id", r.event_id},
+ 	  {"ts", r.ts},
+ 	  {"received_at", r.received_at},
+ 	  {"host", r.host},
+ 	  {"event_type", r.event_type},
+ 	  {"source", r.source},
+ 	  {"source_type", r.source_type},
+ 	  {"severity", r.severity},
+
+ 	  {"receiver_id", safe_string(original, "receiver_id", "")},
+ 	  {"receiver_name", safe_string(original, "receiver_name", "")},
+ 	  {"parser_status", safe_string(original, "parser_status", "")},
+ 	  {"parser_rule_id", safe_string(original, "parser_rule_id", "")},
+ 	  {"parser_rule_name", safe_string(original, "parser_rule_name", "")},
+ 	  {"policy_group_id", safe_string(original, "policy_group_id", "")},
+ 	  {"event_name", safe_string(original, "event_name", "")},
+
+ 	  {"event", original}
+	};
+
         arr.push_back(std::move(item));
       }
 

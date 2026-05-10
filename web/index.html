@@ -50,21 +50,31 @@
 
   <div id="appShell" class="app-shell app-hidden">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">MS</div>
-        <div>
-          <h1>Mini SIEM</h1>
-          <p>Threat Console</p>
-        </div>
-      </div>
+	<div class="brand sidebar-brand">
+	  <button
+	    id="sidebarToggleBtn"
+	    class="brand-toggle-btn"
+	    type="button"
+	    aria-label="Toggle sidebar"
+	    title="Toggle sidebar"
+	  >
+	    <span id="sideBrandMark" class="brand-mark">MS</span>
+	  </button>
 
-	<nav class="nav">
- 	 <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
- 	 <button class="nav-btn" data-tab="events">Events</button>
- 	 <button class="nav-btn" data-tab="alerts">Alerts</button>
- 	 <button class="nav-btn" data-tab="rules">Rules</button>
- 	 <button class="nav-btn admin-only" data-tab="users">Users</button>
-	</nav>
+	  <div class="brand-text">
+	    <h1>Mini SIEM</h1>
+	    <p>Threat Console</p>
+	  </div>
+	</div>
+
+<nav class="nav">
+  <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+  <button class="nav-btn" data-tab="events">Events</button>
+  <button class="nav-btn" data-tab="alerts">Alerts</button>
+  <button class="nav-btn admin-only" data-tab="receivers">Receivers</button>
+  <button class="nav-btn" data-tab="rules">Rules</button>
+  <button class="nav-btn admin-only" data-tab="users">Users</button>
+</nav>
 
 	<div class="side-card auth-side-card">
 	  <div class="side-title">Session</div>
@@ -89,13 +99,6 @@
         <div class="side-title">Controls</div>
         <button id="refreshBtn" class="danger-main-btn">Refresh data</button>
         <button id="autoRefreshBtn" class="ghost-btn">Auto-refresh: OFF</button>
-<button
-  id="themeToggleBtn"
-  class="theme-icon-btn"
-  type="button"
-  aria-label="Toggle theme"
-  title="Toggle theme"
-></button>
         <button id="clearOpenBtn" class="ghost-btn">Close all opened panels</button>
       </div>
 
@@ -111,14 +114,24 @@
     </aside>
 
     <main class="main">
-      <header class="topbar">
-        <div>
-          <div class="eyebrow">portable linux security monitoring</div>
-          <h2 id="pageTitle">Threat Dashboard</h2>
-          <p id="pageSubtitle">Manual investigation console for events, alerts and detection rules.</p>
-        </div>
+<header class="topbar">
+  <div>
+    <div class="eyebrow">portable linux security monitoring</div>
+    <h2 id="pageTitle">Threat Dashboard</h2>
+    <p id="pageSubtitle">Manual investigation console for events, alerts and detection rules.</p>
+  </div>
 
-        <div class="top-kpis">
+  <div class="topbar-actions">
+    <button
+      id="themeToggleBtn"
+      class="theme-icon-btn topbar-theme-btn"
+      type="button"
+      aria-label="Toggle theme"
+      title="Toggle theme"
+    ></button>
+  </div>
+
+  <div class="top-kpis">
           <div class="top-pill">
             <span>Total events</span>
             <strong id="topTotalEvents">0</strong>
@@ -694,6 +707,441 @@
           <div id="alertsList" class="card-list"></div>
         </section>
       </section>
+
+<section id="tabReceivers" class="tab-view">
+  <section class="receiver-console">
+    <aside class="receiver-tree-panel">
+      <div class="receiver-tree-head">
+        <div>
+          <h3>Receivers</h3>
+          <p>ESM / ERC / log source tree</p>
+        </div>
+
+        <span id="receiversCount" class="count-pill">0</span>
+      </div>
+
+      <div class="receiver-tree-toolbar">
+        <button id="newReceiverBtn" class="receiver-tree-icon-btn" type="button" title="Add receiver">+</button>
+        <button id="deleteSelectedReceiverBtn" class="receiver-tree-icon-btn" type="button" title="Delete selected receiver">−</button>
+        <button id="openSelectedReceiverSettingsBtn" class="receiver-tree-icon-btn" type="button" title="Receiver settings">⚙</button>
+      </div>
+
+      <div id="receiverMessage" class="rule-message"></div>
+
+      <div class="receiver-tree-search">
+        <input id="receiverTreeSearchInput" type="search" placeholder="Search receivers..." />
+      </div>
+
+      <div id="receiversList" class="receiver-tree-list"></div>
+    </aside>
+
+    <main class="receiver-workspace">
+      <section id="receiverEmptyState" class="receiver-empty-state">
+        <h3>Select a receiver</h3>
+        <p>Choose an ESM, ERC or log source from the tree to view dashboards, parser rules and settings.</p>
+      </section>
+
+      <section id="receiverDetailPanel" class="receiver-detail-panel hidden">
+        <div class="receiver-detail-head">
+          <div>
+            <div class="eyebrow">selected receiver</div>
+            <h3 id="receiverDetailTitle">Receiver</h3>
+            <p id="receiverDetailSubtitle">—</p>
+          </div>
+
+          <div class="receiver-detail-actions">
+            <button id="openReceiverSettingsInlineBtn" class="ghost-btn">Settings ⚙</button>
+          </div>
+        </div>
+
+<div class="receiver-dashboard-tabs">
+  <button class="receiver-dashboard-tab active" data-receiver-dashboard-tab="standard">Standard dashboard</button>
+  <button class="receiver-dashboard-tab" data-receiver-dashboard-tab="custom">Custom dashboards</button>
+</div>
+
+<div class="receiver-filter-bar">
+  <div class="field">
+    <label>Parser status</label>
+    <select id="receiverParserStatusFilterInput">
+      <option value="">All statuses</option>
+      <option value="parsed">parsed</option>
+      <option value="unparsed">unparsed</option>
+      <option value="built_in">built_in</option>
+    </select>
+  </div>
+
+  <div class="field wide">
+    <label>KQL event filter</label>
+    <input
+      id="receiverKqlFilterInput"
+      type="search"
+      placeholder='event_type:auth_failed AND source.ip:1.2.3.4 OR user.name:"root"'
+    />
+  </div>
+
+  <button id="clearReceiverFiltersBtn" class="ghost-btn" type="button">
+    Clear filters
+  </button>
+</div>
+
+        <section id="receiverDashboardStandard" class="receiver-dashboard-view active">
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <span>Receiver events</span>
+              <strong id="receiverKpiEvents">0</strong>
+              <em>events for selected receiver</em>
+            </div>
+
+            <div class="kpi-card">
+              <span>Unknown events</span>
+              <strong id="receiverKpiUnknown">0</strong>
+              <em>parser_status = unparsed</em>
+            </div>
+
+            <div class="kpi-card">
+              <span>Parsed events</span>
+              <strong id="receiverKpiParsed">0</strong>
+              <em>parser_status = parsed</em>
+            </div>
+
+            <div class="kpi-card">
+              <span>Parser rules</span>
+              <strong id="receiverKpiParserRules">0</strong>
+              <em>enabled on receiver</em>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Event types</h3>
+                  <p>Selected receiver distribution</p>
+                </div>
+              </div>
+              <div id="receiverEventTypesWidget" class="bars"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Parser status</h3>
+                  <p>Parsed vs unknown</p>
+                </div>
+              </div>
+              <div id="receiverParserStatusWidget" class="bars"></div>
+            </section>
+
+            <section class="panel wide">
+              <div class="panel-head">
+                <div>
+                  <h3>Recent receiver events</h3>
+                  <p>Raw / Fields / Packet investigation</p>
+                </div>
+              </div>
+              <div id="receiverRecentEvents" class="card-list compact-dashboard-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="receiverDashboardCustom" class="receiver-dashboard-view">
+          <div class="receiver-custom-dashboard-box">
+            <div>
+              <h4>Apply custom dashboards</h4>
+              <p>Select dashboards that should be associated with this receiver.</p>
+            </div>
+
+            <div id="receiverCustomDashboardsList" class="receiver-check-list"></div>
+
+            <div class="form-actions">
+              <button id="saveReceiverDashboardsBtn" class="danger-main-btn">Save dashboard assignment</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <aside id="receiverSettingsPanel" class="receiver-settings-panel hidden">
+        <div class="receiver-settings-head">
+          <div>
+            <h4 id="receiverSettingsTitle">Receiver settings</h4>
+            <p id="receiverSettingsSubtitle">Select a receiver to configure parser rules.</p>
+          </div>
+
+          <button id="closeReceiverSettingsBtn" class="ghost-btn">Close</button>
+        </div>
+
+<div class="receiver-settings-tabs">
+  <button class="receiver-settings-tab active" data-receiver-settings-tab="config">Config</button>
+  <button class="receiver-settings-tab" data-receiver-settings-tab="parsers">Parser rules</button>
+  <button class="receiver-settings-tab" data-receiver-settings-tab="newParser">Create / Edit parser</button>
+</div>
+
+        <section id="receiverSettingsConfig" class="receiver-settings-view active">
+          <div class="rule-form-grid">
+            <div class="field">
+              <label>Receiver ID</label>
+              <input id="receiverIdInput" type="text" placeholder="recv_linux_auth" />
+            </div>
+
+            <label class="check-field">
+              <input id="receiverEnabledInput" type="checkbox" checked />
+              <span>Enabled</span>
+            </label>
+
+            <div class="field">
+              <label>Name</label>
+              <input id="receiverNameInput" type="text" placeholder="Linux Auth Log" />
+            </div>
+
+            <div class="field">
+              <label>Receiver role</label>
+              <select id="receiverRoleInput">
+                <option value="esm">ESM / Manager</option>
+                <option value="erc">ERC / Collector</option>
+                <option value="receiver" selected>Log Receiver</option>
+                <option value="device">Device / Child source</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Parent</label>
+              <select id="receiverParentInput"></select>
+            </div>
+
+	<div class="field">
+	  <label>Type</label>
+	  <select id="receiverTypeInput">
+	    <option value="file">file</option>
+ 	   <option value="directory">directory</option>
+ 	   </select>
+  	  </div>
+
+            <div class="field wide">
+              <label>Path</label>
+              <input id="receiverPathInput" type="text" placeholder="/var/log/auth.log" />
+            </div>
+
+<div class="field">
+  <label>File pattern</label>
+  <input id="receiverFilePatternInput" type="text" placeholder="*.log" />
+</div>
+
+<label class="check-field">
+  <input id="receiverRecursiveInput" type="checkbox" />
+  <span>Recursive directory scan</span>
+</label>
+
+            <div class="field">
+              <label>Source type</label>
+              <input id="receiverSourceTypeInput" type="text" placeholder="linux_log" />
+            </div>
+
+            <div class="field">
+              <label>Initial position</label>
+              <select id="receiverInitialPositionInput">
+                <option value="end">end</option>
+                <option value="beginning">beginning</option>
+              </select>
+            </div>
+
+            <div class="field wide">
+              <label>Policy groups</label>
+              <div id="receiverPolicyGroupsList" class="receiver-check-list"></div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button id="saveReceiverBtn" class="danger-main-btn">Save receiver</button>
+            <button id="deleteReceiverBtn" class="ghost-btn danger-soft">Delete receiver</button>
+          </div>
+        </section>
+
+<section id="receiverSettingsParsers" class="receiver-settings-view">
+  <div class="receiver-toolbar compact">
+    <div>
+      <h4>Parser rules for this receiver</h4>
+      <p>Select a parser rule, then use + / − / ✎ actions.</p>
+    </div>
+
+<div class="receiver-parser-toolbar">
+  <button id="newParserRuleFromSettingsBtn" class="receiver-tree-icon-btn" type="button" title="Create parser rule">+</button>
+  <button id="deleteSelectedParserRuleBtn" class="receiver-tree-icon-btn" type="button" title="Delete selected parser rule">−</button>
+  <button id="editSelectedParserRuleBtn" class="receiver-tree-icon-btn" type="button" title="Edit selected parser rule">✎</button>
+  <button id="toggleSelectedParserRuleBtn" class="receiver-tree-icon-btn" type="button" title="Enable / disable on this receiver">✓</button>
+</div>
+  </div>
+
+  <div id="receiverParserRulesList" class="rules-list"></div>
+</section>
+
+        <section id="receiverSettingsNewParser" class="receiver-settings-view">
+          <div class="parser-builder-embedded">
+            <div class="rule-editor-title-row">
+              <div>
+                <h4 id="parserRuleFormTitle">Create parser rule</h4>
+                <p>Raw sample → regex extraction → field mapping → enable on selected receivers.</p>
+              </div>
+              <span id="parserEditorModePill" class="editor-mode-pill">create mode</span>
+            </div>
+
+            <div class="rule-form-grid">
+              <div class="field">
+                <label>Parser Rule ID</label>
+                <input id="parserRuleIdInput" type="text" placeholder="parser_ssh_failed" />
+              </div>
+
+              <label class="check-field">
+                <input id="parserRuleEnabledInput" type="checkbox" checked />
+                <span>Enabled</span>
+              </label>
+
+              <div class="field">
+                <label>Name</label>
+                <input id="parserRuleNameInput" type="text" placeholder="SSH Failed Login" />
+              </div>
+
+              <div class="field">
+                <label>Policy Group</label>
+                <select id="parserPolicyGroupInput"></select>
+              </div>
+
+              <div class="field">
+                <label>Match type</label>
+                <select id="parserMatchTypeInput">
+                  <option value="regex">regex</option>
+                  <option value="json">json</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label>Severity</label>
+                <select id="parserConstantSeverityInput">
+                  <option value="info">info</option>
+                  <option value="low">low</option>
+                  <option value="medium" selected>medium</option>
+                  <option value="high">high</option>
+                  <option value="critical">critical</option>
+                </select>
+              </div>
+
+              <div class="field wide">
+                <label>Raw sample</label>
+                <textarea id="parserRawSampleInput" rows="4" placeholder="Paste raw log line here"></textarea>
+              </div>
+
+              <div class="field wide">
+                <label>Regex pattern</label>
+                <textarea id="parserPatternInput" rows="3" placeholder="Failed password for (invalid user )?(\\S+) from (\\S+) port (\\d+) (\\S+)"></textarea>
+              </div>
+
+              <div class="field wide">
+                <label>Field order</label>
+                <input id="parserFieldOrderInput" type="text" placeholder="invalid_prefix, user, src_ip, src_port, protocol" />
+              </div>
+
+              <div class="field">
+                <label>Event code</label>
+                <input id="parserConstantEventCodeInput" type="text" placeholder="LINUX_SSH_FAILED_LOGIN" />
+              </div>
+
+              <div class="field">
+                <label>Event name</label>
+                <input id="parserConstantEventNameInput" type="text" placeholder="SSH Failed Login" />
+              </div>
+
+              <div class="field">
+                <label>Event type</label>
+                <input id="parserConstantEventTypeInput" type="text" placeholder="auth_failed" />
+              </div>
+
+              <div class="field">
+                <label>Event category</label>
+                <input id="parserConstantEventCategoryInput" type="text" placeholder="authentication" />
+              </div>
+
+              <div class="field">
+                <label>Event action</label>
+                <input id="parserConstantEventActionInput" type="text" placeholder="login" />
+              </div>
+
+              <div class="field">
+                <label>Event outcome</label>
+                <input id="parserConstantEventOutcomeInput" type="text" placeholder="failure" />
+              </div>
+
+              <div class="field">
+                <label>Vendor</label>
+                <input id="parserConstantVendorInput" type="text" placeholder="Linux" />
+              </div>
+
+              <div class="field">
+                <label>Product</label>
+                <input id="parserConstantProductInput" type="text" placeholder="OpenSSH" />
+              </div>
+            </div>
+
+            <div class="parser-step-box">
+              <div class="conditions-head">
+                <div>
+                  <h4>Extraction test</h4>
+                  <p>Test pattern against the raw sample before saving.</p>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button id="testParserRuleBtn" class="danger-main-btn">Test extraction</button>
+                <button id="copyParserRuleJsonBtn" class="ghost-btn">Copy JSON</button>
+                <button id="clearParserRuleFormBtn" class="ghost-btn">Clear form</button>
+              </div>
+
+              <div id="parserExtractedPreview" class="parser-preview-box">
+                No extraction test yet.
+              </div>
+            </div>
+
+            <div class="parser-step-box">
+              <div class="conditions-head">
+                <div>
+                  <h4>Field mapping</h4>
+                  <p>Map extracted variables to SIEM fields from the field catalog.</p>
+                </div>
+              </div>
+
+              <div id="parserMappingRows" class="parser-mapping-list"></div>
+            </div>
+
+            <div class="parser-step-box">
+              <div class="conditions-head">
+                <div>
+                  <h4>Rollout</h4>
+                  <p>Choose receivers where this parser rule should be enabled.</p>
+                </div>
+              </div>
+
+              <div id="parserReceiversList" class="receiver-check-list"></div>
+            </div>
+
+            <div class="form-actions">
+              <button id="createParserRuleBtn" class="danger-main-btn">Finish / Save parser rule</button>
+              <button id="updateParserRuleBtn" class="danger-main-btn muted" disabled>Save changes</button>
+            </div>
+
+            <div class="parser-step-box">
+              <div class="conditions-head">
+                <div>
+                  <h4>Live parser JSON</h4>
+                  <p>This is exactly what will be sent to the Parser Rules API.</p>
+                </div>
+              </div>
+
+              <pre id="parserRuleJsonPreview" class="rule-json-preview">{}</pre>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </section>
+</section>
 
       <section id="tabRules" class="tab-view">
         <section class="panel">

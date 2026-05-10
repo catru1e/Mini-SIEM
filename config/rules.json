@@ -221,5 +221,19 @@
     "title": "UI test brute force from IP",
     "type": "threshold",
     "window_sec": 300
-  }
+  },
+{
+  "id": "RULE_TEST_SOURCE_IP_FIELD",
+  "enabled": true,
+  "type": "threshold",
+  "event_types": ["auth_failed"],
+  "source_types": ["linux_log"],
+  "group_by": "source.ip",
+  "threshold": 1,
+  "window_sec": 300,
+  "suppress_sec": 0,
+  "severity": "high",
+  "title": "TEST source.ip threshold",
+  "description": "Detected {{count}} auth_failed events from source.ip {{group_key}}."
+}
 ]

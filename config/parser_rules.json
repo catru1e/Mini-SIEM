@@ -1,0 +1,167 @@
+[
+  {
+    "constants": {
+      "event_action": "login",
+      "event_category": "authentication",
+      "event_code": "LINUX_SSH_FAILED_LOGIN",
+      "event_name": "SSH Failed Login",
+      "event_outcome": "failure",
+      "event_type": "auth_failed",
+      "product": "OpenSSH",
+      "severity": "medium",
+      "vendor": "Linux"
+    },
+    "enabled": true,
+    "enabled_receivers": [
+      "recv_demo_auth",
+      "recv_auth"
+    ],
+    "field_mapping": {
+      "network.protocol": "$protocol",
+      "source.ip": "$src_ip",
+      "source.port": "$src_port",
+      "user.name": "$user"
+    },
+    "field_order": [
+      "invalid_prefix",
+      "user",
+      "src_ip",
+      "src_port",
+      "protocol"
+    ],
+    "id": "parser_ssh_failed",
+    "match_type": "regex",
+    "name": "SSH Failed Login",
+    "pattern": "Failed password for (invalid user )?(\\S+) from (\\S+) port (\\d+) (\\S+)",
+    "policy_group_id": "pg_linux_auth",
+    "sample_raw": ""
+  },
+  {
+    "constants": {
+      "event_action": "session_open",
+      "event_category": "authentication",
+      "event_code": "LINUX_PAM_SESSION_OPEN",
+      "event_name": "PAM Session Opened",
+      "event_outcome": "success",
+      "event_type": "session_open",
+      "product": "PAM",
+      "severity": "low",
+      "vendor": "Linux"
+    },
+    "enabled": true,
+    "enabled_receivers": [
+      "recv_auth",
+      "recv_demo_auth"
+    ],
+    "field_mapping": {
+      "actor.name": "$actor",
+      "service.name": "$service",
+      "user.name": "$user"
+    },
+    "field_order": [
+      "service",
+      "user",
+      "actor"
+    ],
+    "id": "parser_pam_session_open",
+    "match_type": "regex",
+    "name": "PAM Session Opened",
+    "pattern": "pam_unix\\(([^:]+):session\\): session opened for user ([^\\s\\(]+).* by ([^\\s\\(]+)",
+    "policy_group_id": "pg_linux_auth"
+  },
+  {
+    "constants": {
+      "event_action": "session_close",
+      "event_category": "authentication",
+      "event_code": "LINUX_PAM_SESSION_CLOSED",
+      "event_name": "PAM Session Closed",
+      "event_outcome": "success",
+      "event_type": "session_close",
+      "product": "PAM",
+      "severity": "low",
+      "vendor": "Linux"
+    },
+    "enabled": true,
+    "enabled_receivers": [
+      "recv_auth",
+      "recv_demo_auth"
+    ],
+    "field_mapping": {
+      "service.name": "$service",
+      "user.name": "$user"
+    },
+    "field_order": [
+      "service",
+      "user"
+    ],
+    "id": "parser_pam_session_closed",
+    "match_type": "regex",
+    "name": "PAM Session Closed",
+    "pattern": "pam_unix\\(([^:]+):session\\): session closed for user ([^\\s]+)",
+    "policy_group_id": "pg_linux_auth"
+  },
+  {
+    "constants": {
+      "event_action": "login",
+      "event_category": "",
+      "event_code": "LINUX_ACCEPTED_PASSWORD",
+      "event_name": "Accepted Password",
+      "event_outcome": "success",
+      "event_type": "accepted_password",
+      "product": "",
+      "severity": "info",
+      "vendor": ""
+    },
+    "enabled": true,
+    "enabled_receivers": [
+      "recv_web_custom_dir"
+    ],
+    "field_mapping": {
+      "destination.port": "$dest_port",
+      "source.ip": "$src_ip",
+      "user.name": "$user"
+    },
+    "field_order": [
+      "user",
+      "src_ip",
+      "dest_port"
+    ],
+    "id": "accepted_password_custom",
+    "match_type": "regex",
+    "name": "Accepted password",
+    "pattern": "sshd\\[(\\d+)\\]: Accepted password for (\\S+) from (\\S+) port (\\d+) (\\S+)",
+    "policy_group_id": "pg_linux_auth",
+    "sample_raw": "2026-05-10T13:00:04+00:00 smth sshd[1002]: Accepted password for admin from 10.0.0.5 port 55002 ssh2"
+  },
+  {
+    "constants": {
+      "event_action": "login",
+      "event_category": "",
+      "event_code": "FAILED_LOGIN",
+      "event_name": "Failed Login",
+      "event_outcome": "failure",
+      "event_type": "failed_login",
+      "product": "",
+      "severity": "low",
+      "vendor": ""
+    },
+    "enabled": true,
+    "enabled_receivers": [
+      "recv_web_custom_dir"
+    ],
+    "field_mapping": {
+      "custom.string1": "$outcome",
+      "source.ip": "$src_ip",
+      "source.port": "$src_port",
+      "user.name": "$user"
+    },
+    "field_order": [],
+    "id": "login_failed",
+    "json_paths": {},
+    "match_type": "json",
+    "name": "Failed Login",
+    "pattern": "",
+    "policy_group_id": "pg_linux_auth",
+    "sample_raw": "{\"ts\":\"2026-05-10T13:10:00Z\",\"user\":\"admin\",\"src_ip\":\"10.0.0.5\",\"src_port\":55002,\"action\":\"login\",\"outcome\":\"success\"}"
+  }
+]
